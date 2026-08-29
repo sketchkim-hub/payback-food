@@ -540,13 +540,17 @@
           <div><span>신청일자</span><b id="edDate">-</b></div>
           <div><span>입력시각</span><b id="edTime">-</b></div>
           <div><span>생년월일</span><b id="edBirth">-</b></div>
-          <div><span>구매금액</span><b id="edAmount">-</b></div>
           <div><span>현재 지급액</span><b id="edCur">-</b></div>
         </div>
         <div class="modal-sec">
           <h4>이름 수정</h4>
           <input id="edName" type="text" placeholder="이름" autocomplete="off" />
           <div class="hint" id="edNameHint">이름을 고치면 중복·누적 한도 기준도 함께 옮겨집니다.</div>
+        </div>
+        <div class="modal-sec">
+          <h4>구매금액 수정</h4>
+          <input id="edAmountInput" type="text" inputmode="numeric" placeholder="구매금액 (원)" autocomplete="off" />
+          <div class="hint" id="edAmountHint">구매금액을 바꾸면 기준 지급액이 안내됩니다.</div>
         </div>
         <div class="modal-sec">
           <h4>수정할 지급액</h4>
@@ -1529,7 +1533,7 @@ function startApp(){
     $("edDate").textContent = r.date||"-";
     $("edTime").textContent = fmtDateTime(r.createdAt) || "-";
     $("edBirth").textContent = r.birth||"-";
-    $("edAmount").textContent = won(r.amount)+"원";
+    $("edAmountInput").value = won(r.amount||0);
     $("edCur").textContent = won(r.coupon)+"원";
     $("edValue").value = won(r.coupon);
     $("edMsg").style.color=""; $("edMsg").textContent="";
@@ -1544,6 +1548,12 @@ function startApp(){
     const d = $("edValue").value.replace(/\D/g,"");
     $("edValue").value = d ? Number(d).toLocaleString("ko-KR") : "";
   });
+  $("edAmountInput").addEventListener("input", ()=>{
+    const d = $("edAmountInput").value.replace(/\D/g,"");
+    $("edAmountInput").value = d ? Number(d).toLocaleString("ko-KR") : "";
+    const amt = Number(d||0);
+    $("edAmountHint").textContent = amt ? `구매금액 ${won(amt)}원 기준 지급액은 ${won(couponFor(amt))}원입니다.` : "구매금액을 바꾸면 기준 지급액이 안내됩니다.";
+  });
   document.querySelectorAll(".ed-quick").forEach(b=>{
     b.onclick = ()=>{ $("edValue").value = won(Number(b.dataset.v)); };
   });
@@ -1551,12 +1561,15 @@ function startApp(){
     const r = records.find(x=>x.id===editingId); if(!r) return;
     const nv = Number(($("edValue").value||"").replace(/\D/g,""));
     const nname = $("edName").value.trim();
+    const namt = Number(($("edAmountInput").value||"").replace(/\D/g,""));
     const msg = $("edMsg"); msg.style.color="";
     if (cleanName(nname).length < 2){ msg.textContent="이름을 2글자 이상 입력하세요."; return; }
     if (!Number.isFinite(nv) || nv<0){ msg.textContent="올바른 금액을 입력하세요."; return; }
     if (nv % 10000 !== 0){ msg.textContent="온누리상품권은 1만원 단위이므로 10,000원 단위로 입력하세요."; return; }
+    if (!Number.isFinite(namt) || namt<0){ msg.textContent="올바른 구매금액을 입력하세요."; return; }
     const nameChanged = nname !== r.name;
-    if (nv === (r.coupon||0) && !nameChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
+    const amountChanged = namt !== (r.amount||0);
+    if (nv === (r.coupon||0) && !nameChanged && !amountChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
 
     const delta = nv - (r.coupon||0);
     const oldLid = r.ledgerId || (r.dupKey ? "ledger_"+r.dupKey+"_"+yearOf(r.date) : null);
@@ -1575,6 +1588,7 @@ function startApp(){
     }
     const parts = [];
     if (nameChanged) parts.push(`이름: ${r.name} → ${nname}`);
+    if (amountChanged) parts.push(`구매금액: ${won(r.amount)}원 → ${won(namt)}원`);
     if (delta !== 0) parts.push(`지급액: ${won(r.coupon)}원 → ${won(nv)}원`);
     if (!confirm(`${r.name} 님 내역을 수정합니다.\n\n${parts.join("\n")}\n\n(누적 한도·예산도 함께 조정됩니다) 계속할까요?`)) return;
 
@@ -1606,6 +1620,7 @@ function startApp(){
           tx.set(budgetRef, { issued:iss }, { merge:true });
         }
         const upd = { coupon:nv, editedBy: currentEmail, editedAt: serverTimestamp() };
+        if (amountChanged) upd.amount = namt;
         if (nameChanged){ upd.name = nname; upd.dupKey = newDupKey; upd.ledgerId = newLid; }
         tx.set(doc(db,COLLECTION,r.id), upd, { merge:true });
       });
