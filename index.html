@@ -1552,7 +1552,9 @@ function startApp(){
     const d = $("edAmountInput").value.replace(/\D/g,"");
     $("edAmountInput").value = d ? Number(d).toLocaleString("ko-KR") : "";
     const amt = Number(d||0);
-    $("edAmountHint").textContent = amt ? `구매금액 ${won(amt)}원 기준 지급액은 ${won(couponFor(amt))}원입니다.` : "구매금액을 바꾸면 기준 지급액이 안내됩니다.";
+    const g = couponFor(amt);
+    $("edValue").value = won(g);      // 구매금액 기준 지급액으로 자동 반영
+    $("edAmountHint").textContent = amt ? `구매금액 ${won(amt)}원 기준 지급액 ${won(g)}원으로 자동 설정됨 (필요 시 아래에서 조정)` : "구매금액을 바꾸면 기준 지급액이 자동 반영됩니다.";
   });
   document.querySelectorAll(".ed-quick").forEach(b=>{
     b.onclick = ()=>{ $("edValue").value = won(Number(b.dataset.v)); };
