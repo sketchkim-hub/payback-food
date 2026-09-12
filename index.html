@@ -373,7 +373,7 @@
         </div>
         <div class="stat-grid">
           <div class="stat"><div class="k" id="statScopeLabel">신청 인원</div><div class="v" id="sCount">0</div><div class="sub">명</div></div>
-          <div class="stat"><div class="k">온누리상품권 지급</div><div class="v" id="sVouchers">0<span style="font-size:14px">건</span></div><div class="sub" id="sVoucherNote">-</div></div>
+          <div class="stat"><div class="k">온누리 1만원권</div><div class="v" id="sVouchers">0<span style="font-size:14px">장</span></div><div class="sub" id="sVoucherNote">-</div></div>
           <div class="stat total"><div class="k" id="sTotalLabel">총 지급 금액</div><div class="v" id="sTotal">0원</div></div>
           <div class="stat"><div class="k">남은 예산</div><div class="v" id="sRemain">0원</div><div class="sub" id="sRemainNote">하루 예산 기준</div></div>
         </div>
@@ -711,7 +711,7 @@ function startApp(){
     const barColor = over ? "var(--dancheong-red)" : pct>=80 ? "#d9822b" : "var(--dancheong-blue)";
     const remLine = over
       ? `<b style="color:var(--dancheong-red)">예산 초과(여유분 사용) ${won(-rem)}원 초과</b> · 지급 계속 가능`
-      : `여유 예산 <b style="color:var(--dancheong-blue)">${won(rem)}원</b> — 1만원권 <b>${Math.floor(rem/10000)}장</b> 또는 2만원권 <b>${Math.floor(rem/20000)}장</b> 가능`;
+      : `여유 예산 <b style="color:var(--dancheong-blue)">${won(rem)}원</b> — 1만원권 <b>${Math.floor(rem/10000)}장</b> 지급 가능`;
     el.innerHTML = `
       <div class="bhead"><span><b>오늘 상품권 지급</b> (${todayStr()})</span><span><b>${won(used)}</b> / ${won(dailyBudget)}원</span></div>
       <div class="btrack"><div class="bfill" style="width:${pct}%;background:${barColor}"></div></div>
@@ -1420,8 +1420,9 @@ function startApp(){
     $("statScopeLabel").textContent = !isMaster ? "내 신청 인원" : (op ? "신청 인원("+op+")" : "신청 인원(전체)");
     $("sTotalLabel").textContent = !isMaster ? "내 총 지급 금액" : (op ? "지급 금액("+op+")" : "전체 총 지급 금액");
     $("sCount").textContent = rows.length;
-    $("sVouchers").innerHTML = won(c10+c20)+'<span style="font-size:14px">건</span>';
-    $("sVoucherNote").textContent = `1만원 ${won(c10)} · 2만원 ${won(c20)}`;
+    const vouchers = Math.round(total/10000);   // 실물 1만원권 장수 (2만원 지급 = 2장)
+    $("sVouchers").innerHTML = won(vouchers)+'<span style="font-size:14px">장</span>';
+    $("sVoucherNote").textContent = `1만원 ${won(c10)}명 · 2만원 ${won(c20)}명`;
     $("sTotal").textContent = won(total)+"원";
     $("sRemain").textContent = (rem>=0 ? won(rem) : "초과 "+won(-rem))+"원";
     $("sRemainNote").textContent = `하루 예산 ${won(dailyBudget)}원 기준`;
@@ -1731,6 +1732,7 @@ function startApp(){
     aoa.push({"신청일자":"신청 인원","이름":rows.length+"명"});
     aoa.push({"신청일자":"온누리 1만원 지급","이름":c10+"명","생년월일":won(c10*10000)+"원"});
     aoa.push({"신청일자":"온누리 2만원 지급","이름":c20+"명","생년월일":won(c20*20000)+"원"});
+    aoa.push({"신청일자":"1만원권 총 매수","이름":Math.round(totalPaid/10000)+"장","생년월일":"2만원 지급=2장"});
     aoa.push({"신청일자":"구매금액 합계","이름":won(totalBuy)+"원"});
     aoa.push({"신청일자":"지급금액 합계","이름":won(totalPaid)+"원"});
     aoa.push({"신청일자":"남은 예산(하루 기준)","이름":won(dailyBudget-totalPaid)+"원"});
