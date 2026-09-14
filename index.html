@@ -85,6 +85,11 @@
   /* 기존 수령 내역 패널 */
   .histbox{display:none;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:#fff;font-size:12.5px}
   #eligCheck{margin-top:7px;padding:9px 12px;border-radius:9px;background:var(--hanji-2);font-size:13px;line-height:1.55}
+  .sales-row{display:flex;gap:8px;margin-bottom:6px}
+  .sales-row .sStore{flex:1.6}
+  .sales-row .sAmt{flex:1;text-align:right}
+  .sales-total{margin-top:6px;font-size:14px;text-align:right;color:var(--ink)}
+  .sales-total b{color:var(--dancheong-red);font-size:16px}
   #eligCheck.elig-ok{background:#e9f3f1;border:1px solid #bfe0d9}
   #eligCheck.elig-no{background:#fbeae6;border:1px solid #eccabf}
   .histbox.show{display:block}
@@ -270,12 +275,7 @@
             <div class="tier t10"><b>67,000원 이상 구매</b><span class="amt">온누리 2만원</span></div>
           </div>
 
-          <div class="field wide">
-            <label for="fStore">구매 점포 <span style="font-weight:400;color:var(--ink-soft)">(상인회 점포 확인)</span></label>
-            <input id="fStore" list="storeOptions" type="text" placeholder="점포명 2~3글자 입력 → 자동완성" autocomplete="off" />
-            <datalist id="storeOptions"></datalist>
-            <div class="hint" id="storeCheck">등록된 상인회 점포명을 입력하면 자동으로 확인됩니다.</div>
-          </div>
+          <datalist id="storeOptions"></datalist>
 
           <div class="field">
             <label for="fDate">신청일자</label>
@@ -323,9 +323,16 @@
           </div>
 
           <div class="field wide">
-            <label for="fAmount">구매금액 (원)</label>
-            <input id="fAmount" type="text" inputmode="numeric" placeholder="예: 35,000" autocomplete="off" />
-            <div class="hint" id="couponPreview">금액을 입력하면 지급될 상품권이 표시됩니다.</div>
+            <label>매출현황 (점포별 구매금액 · 최대 5곳)</label>
+            <div id="salesRows">
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명1 (자동완성)" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액1" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명2" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액2" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명3" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액3" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명4" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액4" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명5" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액5" autocomplete="off" /></div>
+            </div>
+            <div class="sales-total" id="salesTotal">구매금액 합계: <b>0원</b></div>
+            <div class="hint" id="couponPreview">점포별 금액을 입력하면 합계·지급액이 표시됩니다.</div>
           </div>
 
           <div class="wide"><div id="historyBox" class="histbox"></div></div>
@@ -888,7 +895,6 @@ function startApp(){
     if (hits.length){ el.style.color=""; el.textContent=`검색된 점포 ${hits.length}곳: ${hits.slice(0,5).map(s=>s.name).join(", ")}${hits.length>5?" …":""} (목록에서 선택)`; }
     else { el.style.color="var(--dancheong-red)"; el.textContent="⚠ 등록된 점포명이 아닙니다. 확인 후 입력하세요."; }
   }
-  $("fStore").addEventListener("input", checkStore);
 
   function renderStoreList(){
     $("storeCount").textContent = storeList.length;
@@ -1110,6 +1116,14 @@ function startApp(){
 
   /* ---------- 쿠폰 판정 ---------- */
   const couponFor = amt => amt>=67000 ? 20000 : amt>=34000 ? 10000 : 0;
+  // 매출현황: 5개 점포행에서 합계·목록 산출
+  const salesAmts = () => [...document.querySelectorAll("#salesRows .sAmt")].map(el=>Number((el.value||"").replace(/\D/g,""))||0);
+  const salesTotal = () => salesAmts().reduce((s,n)=>s+n,0);
+  function salesData(){
+    const rows=[...document.querySelectorAll("#salesRows .sales-row")];
+    return rows.map(r=>({ name:(r.querySelector(".sStore").value||"").trim(), amt:Number((r.querySelector(".sAmt").value||"").replace(/\D/g,""))||0 }))
+               .filter(x=> x.name || x.amt>0);
+  }
 
   /* ---------- 지급액 미리보기 + 기존 수령 내역 ---------- */
   // 이름에서 한글·영문·숫자 외 문자(백틱·공백·기호 등)는 무시하고 대조
@@ -1143,7 +1157,7 @@ function startApp(){
   function updatePreview(){
     const el = $("couponPreview");
     const elig = $("eligCheck");
-    const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
+    const amount = salesTotal();
     const tier = couponFor(amount);
     const name = $("fName").value.trim();
     const birth = getBirth();
@@ -1186,7 +1200,7 @@ function startApp(){
   function renderElig(data){
     const elig = $("eligCheck"), box = $("historyBox"); box.className="histbox";
     const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
-    const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
+    const amount = salesTotal();
     const tier = couponFor(amount);
     const phone = digitsOnly($("fPhone").value);
     const { name, birth, year, paid, recs } = data;
@@ -1224,7 +1238,7 @@ function startApp(){
         + warn + phoneWarn;
     }
   }
-  ["fName","fPhone","fAmount","fDate"].forEach(id => $(id).addEventListener("input", updatePreview));
+  ["fName","fPhone","fDate"].forEach(id => $(id).addEventListener("input", updatePreview));
   $("fDate").addEventListener("change", updatePreview);
   [bY,bM,bD].forEach(el => el.addEventListener("input", updatePreview));
 
@@ -1240,10 +1254,19 @@ function startApp(){
   });
 
   /* ---------- 구매금액 천단위 콤마 (숫자만) ---------- */
-  $("fAmount").addEventListener("input", ()=>{
-    const d = $("fAmount").value.replace(/\D/g,"");
-    $("fAmount").value = d ? Number(d).toLocaleString("ko-KR") : "";
+  document.querySelectorAll("#salesRows .sAmt").forEach(el=>{
+    el.addEventListener("input", ()=>{
+      const d = el.value.replace(/\D/g,"");
+      el.value = d ? Number(d).toLocaleString("ko-KR") : "";
+      renderSalesTotal();
+      updatePreview();
+    });
   });
+  document.querySelectorAll("#salesRows .sStore").forEach(el=> el.addEventListener("input", updatePreview));
+  function renderSalesTotal(){
+    const t = salesTotal();
+    $("salesTotal").innerHTML = `구매금액 합계: <b>${won(t)}원</b>`;
+  }
 
   /* ---------- 중복키 (이름+생년월일 2개 기준) ---------- */
   async function makeDupKey(name, birth){
@@ -1254,7 +1277,9 @@ function startApp(){
 
   /* ---------- 폼 초기화 (다음 사람 입력) ---------- */
   function resetForm(clearMsg){
-    ["fName","fPhone","fAmount","fAddress","fStore"].forEach(id=>$(id).value="");
+    ["fName","fPhone","fAddress"].forEach(id=>$(id).value="");
+    document.querySelectorAll("#salesRows input").forEach(el=>el.value="");
+    if($("salesTotal")) $("salesTotal").innerHTML="구매금액 합계: <b>0원</b>";
     clearBirth(); $("fDistrict").value="";
     $("fConsent").checked=false; $("fMarketing").checked=false;
     $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
@@ -1281,10 +1306,11 @@ function startApp(){
     const phoneRaw = $("fPhone").value.replace(/\D/g,"");
     const district = $("fDistrict").value;
     const address = $("fAddress").value.trim();
-    const store = $("fStore").value.trim();
+    const sales = salesData();
+    const store = sales[0] ? sales[0].name : "";
     const storeCat = (findStore(store)||{}).cat || "";
     const marketing = $("fMarketing").checked;
-    const amount = Number(($("fAmount").value||"").replace(/\D/g,""));
+    const amount = salesTotal();
     const date = $("fDate").value;
 
     if (!date || !name || !birth || !phoneRaw || !amount){ toast(r,"warn","입력 확인","날짜·이름·생년월일·전화번호·금액을 모두 입력하세요."); return; }
@@ -1294,7 +1320,7 @@ function startApp(){
     if (!$("fConsent").checked){ toast(r,"warn","동의 필요","개인정보 수집·이용에 동의해야 접수할 수 있습니다."); return; }
 
     const tier = couponFor(amount);
-    if (tier===0){ toast(r,"warn","지급 대상 아님",`구매금액이 3만원 미만입니다. (입력: ${won(amount)}원)`); return; }
+    if (tier===0){ toast(r,"warn","지급 대상 아님",`구매금액 합계가 34,000원 미만입니다. (합계: ${won(amount)}원)`); return; }
 
     const dupKey = await makeDupKey(name, birth);
     const yr = yearOf(date);
@@ -1307,7 +1333,7 @@ function startApp(){
 
     // 이미 한도 초과면 즉시 차단(서버 요청 전) — 예외 지급 버튼 제공
     if (CAP - paidClient <= 0){
-      showCapBlocked(paidClient, { date, name, birth, phoneRaw, district, address, store, storeCat, marketing, amount, tier, dupKey, ledgerId, yr, paid:paidClient }, diffPhone);
+      showCapBlocked(paidClient, { date, name, birth, phoneRaw, district, address, store, storeCat, stores:sales, marketing, amount, tier, dupKey, ledgerId, yr, paid:paidClient }, diffPhone);
       return;
     }
 
@@ -1326,12 +1352,12 @@ function startApp(){
         tx.set(ledgerRef, { ledger:true, paid: paid + g, dupKey, year: yr, updatedAt: serverTimestamp() }, { merge:true });
         tx.set(budgetRef, { budget:true, date, issued: (bs.exists()?(bs.data().issued||0):0) + g }, { merge:true });
         const recRef = doc(collection(db, "applications"));
-        tx.set(recRef, { date, name, birth, phone:phoneRaw, district, address, store, storeCat, amount, coupon:g, marketing, dupKey, ledgerId, operatorUid: currentUid, operatorEmail: currentEmail, createdAt: serverTimestamp() });
+        tx.set(recRef, { date, name, birth, phone:phoneRaw, district, address, store, storeCat, stores:sales, amount, coupon:g, marketing, dupKey, ledgerId, operatorUid: currentUid, operatorEmail: currentEmail, createdAt: serverTimestamp() });
         return { blocked:false, paid, grant:g };
       });
 
       if (result.blocked){
-        showCapBlocked(result.paid, { date, name, birth, phoneRaw, district, address, store, storeCat, marketing, amount, tier, dupKey, ledgerId, yr, paid:result.paid }, diffPhone);
+        showCapBlocked(result.paid, { date, name, birth, phoneRaw, district, address, store, storeCat, stores:sales, marketing, amount, tier, dupKey, ledgerId, yr, paid:result.paid }, diffPhone);
         return;
       }
       const { paid, grant } = result;
@@ -1383,7 +1409,7 @@ function startApp(){
         tx.set(ledgerRef, { ledger:true, paid: paid + p.tier, dupKey:p.dupKey, year:p.yr, updatedAt: serverTimestamp() }, { merge:true });
         tx.set(budgetRef, { budget:true, date:p.date, issued: (bs.exists()?(bs.data().issued||0):0) + p.tier }, { merge:true });
         const recRef = doc(collection(db, "applications"));
-        tx.set(recRef, { date:p.date, name:p.name, birth:p.birth, phone:p.phoneRaw, district:p.district, address:p.address, store:p.store, storeCat:p.storeCat,
+        tx.set(recRef, { date:p.date, name:p.name, birth:p.birth, phone:p.phoneRaw, district:p.district, address:p.address, store:p.store, storeCat:p.storeCat, stores:p.stores||[],
           amount:p.amount, coupon:p.tier, marketing:p.marketing, dupKey:p.dupKey, ledgerId:p.ledgerId,
           operatorUid: currentUid, operatorEmail: currentEmail, exception:true, approvedBy: currentEmail, createdAt: serverTimestamp() });
       });
@@ -1710,69 +1736,73 @@ function startApp(){
     if (fg) rows = rows.filter(r=>(r.district||"")===fg);
     if (fo) rows = rows.filter(r=>(r.operatorEmail||"")===fo);
     if(!rows.length){ alert("내보낼 데이터가 없습니다."); return; }
-    const aoa = rows.map(r=>({
-      "신청일자": r.date, "입력시각": fmtTime(r.createdAt), "입력일시": fmtDateTime(r.createdAt),
-      "이름": r.name, "생년월일": r.birth,
-      "거주구": r.district||"", "상세주소": r.address||"", "구매점포": r.store||"", "업종": r.storeCat||"",
-      "휴대폰번호": (r.phone||"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3"),
-      "구매금액": r.amount, "지급상품권": r.coupon,
-      "예외지급": r.exception ? "예외" : "",
-      "예외승인자": r.exception ? (r.approvedBy||"") : "",
-      "수정일시": fmtDateTime(r.editedAt),
-      "수정자": r.editedBy||"",
-      "알림수신동의": r.marketing ? "동의" : "미동의",
-      "입력담당자": r.operatorEmail||""
-    }));
-    const c10=rows.filter(r=>r.coupon===10000).length;
-    const c20=rows.filter(r=>r.coupon===20000).length;
-    const totalPaid=rows.reduce((s,r)=>s+(r.coupon||0),0);
-    const totalBuy=rows.reduce((s,r)=>s+(r.amount||0),0);
-    aoa.push({});
-    aoa.push({"신청일자": isMaster ? "── 전체 집계 ──" : "── 내 접수 집계 ──"});
-    aoa.push({"신청일자":"신청 인원","이름":rows.length+"명"});
-    aoa.push({"신청일자":"온누리 1만원 지급","이름":c10+"명","생년월일":won(c10*10000)+"원"});
-    aoa.push({"신청일자":"온누리 2만원 지급","이름":c20+"명","생년월일":won(c20*20000)+"원"});
-    aoa.push({"신청일자":"1만원권 총 매수","이름":Math.round(totalPaid/10000)+"장","생년월일":"2만원 지급=2장"});
-    aoa.push({"신청일자":"구매금액 합계","이름":won(totalBuy)+"원"});
-    aoa.push({"신청일자":"지급금액 합계","이름":won(totalPaid)+"원"});
-    aoa.push({"신청일자":"남은 예산(하루 기준)","이름":won(dailyBudget-totalPaid)+"원"});
-    aoa.push({"신청일자":"알림수신 동의","이름":rows.filter(r=>r.marketing).length+"명"});
-    // 계정(담당자)별 집계 — 대표 관리자만
-    if (isMaster){
-      aoa.push({});
-      aoa.push({"신청일자":"── 담당자별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액"});
-      const am={}; rows.forEach(r=>{const k=r.operatorEmail||"(미지정)"; am[k]=am[k]||{n:0,buy:0,pay:0}; am[k].n++; am[k].buy+=(r.amount||0); am[k].pay+=(r.coupon||0);});
-      Object.keys(am).sort((a,b)=>am[b].pay-am[a].pay).forEach(k=>{
-        aoa.push({"신청일자":k,"이름":am[k].n+"건","생년월일":won(am[k].buy)+"원","거주구":won(am[k].pay)+"원"});
-      });
-    }
-    // 구별 집계
-    aoa.push({});
-    aoa.push({"신청일자":"── 구별 집계 ──","이름":"인원","생년월일":"지급액"});
-    const order=["동구","중구","서구","유성구","대덕구","그 외"];
-    const gmap={}; rows.forEach(r=>{const k=r.district||"미지정"; gmap[k]=gmap[k]||{n:0,s:0}; gmap[k].n++; gmap[k].s+=(r.coupon||0);});
-    [...order.filter(k=>gmap[k]), ...Object.keys(gmap).filter(k=>!order.includes(k))].forEach(k=>{
-      aoa.push({"신청일자":k,"이름":gmap[k].n+"명","생년월일":won(gmap[k].s)+"원"});
+    rows = [...rows].sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+
+    const krDate = ds => { if(!ds) return ""; const [y,m,d]=ds.split("-").map(Number); const w="일월화수목금토"[new Date(y,m-1,d).getDay()]; return `${y}. ${m}. ${d}.(${w})`; };
+    const eventDate = fd || rows[0]?.date || new Date().toISOString().slice(0,10);
+    const salesPairs = r => {
+      let p = (Array.isArray(r.stores) && r.stores.length) ? r.stores : ((r.store||r.amount) ? [{name:r.store||"", amt:r.amount||0}] : []);
+      return p.slice(0,5);
+    };
+
+    const A = [];
+    A.push(["온누리상품권 환급행사 일일실적 보고"]);           // 0: 제목
+    A.push([]);                                                 // 1
+    A.push(["운영현황"]);                                       // 2
+    A.push(["시 장 명","문창전통시장"]);                         // 3
+    A.push(["행 사 일", krDate(eventDate)]);                     // 4
+    A.push(["운영시간","09:00~17:00"]);                          // 5
+    A.push(["참여점포", storeList.length]);                      // 6
+    A.push([]);                                                 // 7
+    A.push(["일련번호","성명","생년월일","연락처","환급액","매출현황","","","","","","","","","",""]); // 8 상단헤더
+    A.push(["","","","","","계","점포명1","금액","점포명2","금액","점포명3","금액","점포명4","금액","점포명5","금액"]); // 9 하단헤더
+
+    let sumPay=0, sumBuy=0;
+    rows.forEach((r,i)=>{
+      const pairs = salesPairs(r);
+      const cells = [ i+1, r.name, (r.birth||"").replace(/-/g,""),
+        (r.phone||"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3"),
+        r.coupon||0, r.amount||0 ];
+      for(let k=0;k<5;k++){ cells.push(pairs[k]?pairs[k].name:""); cells.push(pairs[k]?(pairs[k].amt||0):""); }
+      A.push(cells);
+      sumPay += (r.coupon||0); sumBuy += (r.amount||0);
     });
-    // 점포별 집계
-    aoa.push({});
-    aoa.push({"신청일자":"── 점포별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액"});
-    const smap={}; rows.forEach(r=>{const k=(r.store&&r.store.trim())||"(점포 미입력)"; smap[k]=smap[k]||{n:0,buy:0,pay:0}; smap[k].n++; smap[k].buy+=(r.amount||0); smap[k].pay+=(r.coupon||0);});
-    Object.keys(smap).sort((a,b)=>smap[b].pay-smap[a].pay).forEach(k=>{
-      aoa.push({"신청일자":k,"이름":smap[k].n+"건","생년월일":won(smap[k].buy)+"원","거주구":won(smap[k].pay)+"원"});
-    });
-    // 업종별 집계
-    aoa.push({});
-    aoa.push({"신청일자":"── 업종별 집계 ──","이름":"건수","생년월일":"구매금액","거주구":"지급금액"});
-    const cmap={}; rows.forEach(r=>{const k=(r.storeCat&&r.storeCat.trim())||"(업종 미지정)"; cmap[k]=cmap[k]||{n:0,buy:0,pay:0}; cmap[k].n++; cmap[k].buy+=(r.amount||0); cmap[k].pay+=(r.coupon||0);});
-    Object.keys(cmap).sort((a,b)=>cmap[b].pay-cmap[a].pay).forEach(k=>{
-      aoa.push({"신청일자":k,"이름":cmap[k].n+"건","생년월일":won(cmap[k].buy)+"원","거주구":won(cmap[k].pay)+"원"});
-    });
-    const ws = XLSX.utils.json_to_sheet(aoa);
-    ws["!cols"]=[{wch:12},{wch:10},{wch:20},{wch:10},{wch:12},{wch:8},{wch:20},{wch:16},{wch:10},{wch:16},{wch:10},{wch:10},{wch:10},{wch:22},{wch:20},{wch:22},{wch:12},{wch:22}];
+    A.push(["합계","","","", sumPay, sumBuy, "","","","","","","","","",""]);
+
+    const ws = XLSX.utils.aoa_to_sheet(A);
+    ws["!merges"] = [
+      {s:{r:0,c:0},e:{r:0,c:15}},   // 제목
+      {s:{r:8,c:0},e:{r:9,c:0}},    // 일련번호
+      {s:{r:8,c:1},e:{r:9,c:1}},    // 성명
+      {s:{r:8,c:2},e:{r:9,c:2}},    // 생년월일
+      {s:{r:8,c:3},e:{r:9,c:3}},    // 연락처
+      {s:{r:8,c:4},e:{r:9,c:4}},    // 환급액
+      {s:{r:8,c:5},e:{r:8,c:15}},   // 매출현황
+    ];
+    ws["!cols"] = [{wch:8},{wch:10},{wch:11},{wch:14},{wch:10},{wch:11},
+      {wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10}];
+
+    // 집계 시트(참고용)
+    const c10=rows.filter(r=>r.coupon===10000).length, c20=rows.filter(r=>r.coupon===20000).length;
+    const S=[];
+    S.push(["집계 요약"]);
+    S.push(["신청 인원", rows.length+"명"]);
+    S.push(["온누리 1만원 지급", c10+"명", won(c10*10000)+"원"]);
+    S.push(["온누리 2만원 지급", c20+"명", won(c20*20000)+"원"]);
+    S.push(["1만원권 총 매수", Math.round(sumPay/10000)+"장","(2만원 지급=2장)"]);
+    S.push(["구매금액 합계", sumBuy]);
+    S.push(["환급액 합계", sumPay]);
+    S.push([]);
+    S.push(["── 점포별 집계 ──","건수","구매금액","지급금액"]);
+    const smap={}; rows.forEach(r=> salesPairs(r).forEach(p=>{ const k=(p.name||"").trim()||"(미입력)"; smap[k]=smap[k]||{n:0,buy:0}; smap[k].n++; smap[k].buy+=(p.amt||0); }));
+    Object.keys(smap).sort((a,b)=>smap[b].buy-smap[a].buy).forEach(k=> S.push([k, smap[k].n+"건", smap[k].buy, ""]));
+    const ws2 = XLSX.utils.aoa_to_sheet(S);
+    ws2["!cols"]=[{wch:20},{wch:12},{wch:14},{wch:14}];
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "페이백접수");
-    XLSX.writeFile(wb, `페이백_${fy||"전체연도"}${fd?"_"+fd:""}${fg?"_"+fg:""}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "일일실적보고");
+    XLSX.utils.book_append_sheet(wb, ws2, "집계");
+    XLSX.writeFile(wb, `온누리환급_일일실적_${eventDate}.xlsx`);
   };
 }
 </script>
