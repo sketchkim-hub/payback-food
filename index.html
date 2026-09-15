@@ -87,6 +87,9 @@
   #eligCheck{margin-top:7px;padding:9px 12px;border-radius:9px;background:var(--hanji-2);font-size:13px;line-height:1.55}
   .sales-row{display:flex;gap:8px;margin-bottom:6px}
   .sales-row .sStore{flex:1.6}
+  .sales-row .sStore.bad{border-color:var(--dancheong-red);background:#fbeae6}
+  .sales-warn{display:none;margin-top:6px;font-size:12.5px;color:var(--dancheong-red);font-weight:700}
+  .sales-warn.show{display:block}
   .sales-row .sAmt{flex:1;text-align:right}
   .sales-total{margin-top:6px;font-size:14px;text-align:right;color:var(--ink)}
   .sales-total b{color:var(--dancheong-red);font-size:16px}
@@ -332,6 +335,7 @@
               <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명5" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액5" autocomplete="off" /></div>
             </div>
             <div class="sales-total" id="salesTotal">구매금액 합계: <b>0원</b></div>
+            <div id="salesStoreMsg" class="sales-warn"></div>
             <div class="hint" id="couponPreview">점포별 금액을 입력하면 합계·지급액이 표시됩니다.</div>
           </div>
 
@@ -665,7 +669,7 @@ function startApp(){
         ()  => { dynamicMasters=[]; approvedOps=[]; pendingOps=[]; applyAccess(); });
       if (storeUnsub) storeUnsub();
       storeUnsub = onSnapshot(doc(db,COLLECTION,STORE_ID),
-        snap => { storeList = (snap.exists() && Array.isArray(snap.data().stores) ? snap.data().stores : []).map(normStoreObj).filter(s=>s.name); populateStoreDatalist(); if (acctModal.classList.contains("show")) renderStoreList(); checkStore(); },
+        snap => { storeList = (snap.exists() && Array.isArray(snap.data().stores) ? snap.data().stores : []).map(normStoreObj).filter(s=>s.name); populateStoreDatalist(); if (acctModal.classList.contains("show")) renderStoreList(); checkStore(); if(document.querySelector("#salesRows .sStore")) checkSalesStores(); },
         ()  => { storeList = []; populateStoreDatalist(); });
     } else {
       currentUid = null; currentEmail = ""; isMaster = false; isApproved = false;
@@ -1262,7 +1266,27 @@ function startApp(){
       updatePreview();
     });
   });
-  document.querySelectorAll("#salesRows .sStore").forEach(el=> el.addEventListener("input", updatePreview));
+  document.querySelectorAll("#salesRows .sStore").forEach(el=> el.addEventListener("input", ()=>{ checkSalesStores(); updatePreview(); }));
+  /* 매출현황 점포 검증 — 등록된 참여점포만 허용 */
+  function checkSalesStores(){
+    const bad = [];
+    document.querySelectorAll("#salesRows .sales-row").forEach(row=>{
+      const el = row.querySelector(".sStore");
+      const v = (el.value||"").trim();
+      if (!v){ el.classList.remove("bad"); return; }
+      if (findStore(v)){ el.classList.remove("bad"); }
+      else { el.classList.add("bad"); bad.push(v); }
+    });
+    const msg = $("salesStoreMsg");
+    if (bad.length){
+      msg.className = "sales-warn show";
+      msg.textContent = `참여점포가 아닙니다. (${bad.join(", ")}) — 등록된 참여점포만 입력할 수 있습니다.`;
+    } else {
+      msg.className = "sales-warn";
+      msg.textContent = "";
+    }
+    return bad;
+  }
   function renderSalesTotal(){
     const t = salesTotal();
     $("salesTotal").innerHTML = `구매금액 합계: <b>${won(t)}원</b>`;
@@ -1280,6 +1304,8 @@ function startApp(){
     ["fName","fPhone","fAddress"].forEach(id=>$(id).value="");
     document.querySelectorAll("#salesRows input").forEach(el=>el.value="");
     if($("salesTotal")) $("salesTotal").innerHTML="구매금액 합계: <b>0원</b>";
+    document.querySelectorAll("#salesRows .sStore").forEach(el=>el.classList.remove("bad"));
+    if($("salesStoreMsg")){ $("salesStoreMsg").className="sales-warn"; $("salesStoreMsg").textContent=""; }
     clearBirth(); $("fDistrict").value="";
     $("fConsent").checked=false; $("fMarketing").checked=false;
     $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
@@ -1314,6 +1340,10 @@ function startApp(){
     const date = $("fDate").value;
 
     if (!date || !name || !birth || !phoneRaw || !amount){ toast(r,"warn","입력 확인","날짜·이름·생년월일·전화번호·금액을 모두 입력하세요."); return; }
+    // 참여점포 검증 — 등록되지 않은 점포는 접수 불가
+    const badStores = checkSalesStores();
+    if (badStores.length){ toast(r,"warn","참여점포가 아닙니다.",`${badStores.join(", ")} — 등록된 참여점포만 입력할 수 있습니다.`); return; }
+    if (sales.some(s=> s.amt>0 && !s.name)){ toast(r,"warn","점포명 확인","금액을 입력한 행은 점포명도 입력해야 합니다."); return; }
     if (birth==="INVALID"){ toast(r,"warn","생년월일 확인","생년월일이 올바르지 않습니다. (예: 1979 / 10 / 10)"); return; }
     if (!/^01\d{8,9}$/.test(phoneRaw)){ toast(r,"warn","전화번호 확인","올바른 휴대폰 번호를 입력하세요."); return; }
     if (!district){ toast(r,"warn","지역 선택","거주 지역(구)을 선택하세요."); return; }
