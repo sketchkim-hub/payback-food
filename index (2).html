@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>가공식품 페이백 행사 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --hanji:#f3ece0;       /* 한지 바탕 */
+    --hanji-2:#ece2d2;
+    --ink:#2b2a26;         /* 먹색 */
+    --ink-soft:#6a655c;
+    --line:#d9cdb8;
+    --dancheong-blue:#1f6f6b;   /* 단청 청록 */
+    --dancheong-red:#b3331f;    /* 단청 적 (도장) */
+    --dancheong-gold:#c79a3c;   /* 단청 황 */
+    --paper:#fbf7ef;
+    --good:#1f6f6b;
+    --warn:#b3331f;
+    --radius:14px;
+    --shadow:0 8px 30px rgba(43,42,38,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Noto Sans KR",system-ui,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(circle at 12% 8%, rgba(199,154,60,.08), transparent 40%),
+      radial-gradient(circle at 88% 92%, rgba(31,111,107,.08), transparent 42%),
+      var(--hanji);
+    background-attachment:fixed;
+    min-height:100vh;
+    line-height:1.55;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:18px 16px 60px}
+  /* 도장 로고 */
+  .seal{
+    width:54px;height:54px;flex:0 0 54px;border-radius:10px;
+    border:2.5px solid var(--dancheong-red);
+    color:var(--dancheong-red);
+    display:flex;align-items:center;justify-content:center;
+    font-family:"Gowun Batang",serif;font-weight:700;font-size:13px;line-height:1.1;text-align:center;
+    transform:rotate(-3deg);
+    box-shadow:inset 0 0 0 2px rgba(179,51,31,.18);
+  }
+  header.top{display:flex;align-items:center;gap:14px;padding:14px 0 18px}
+  header.top h1{font-family:"Gowun Batang",serif;font-size:21px;margin:0;font-weight:700;letter-spacing:-.5px}
+  header.top p{margin:2px 0 0;font-size:12.5px;color:var(--ink-soft)}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .pad{padding:22px}
+  /* 화면 전환 */
+  .screen{display:none}
+  .screen.active{display:block}
+  /* 설정/로그인 공통 */
+  .center-card{max-width:420px;margin:6vh auto 0}
+  label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px;color:var(--ink)}
+  .hint{font-size:11.5px;color:var(--ink-soft);font-weight:400;margin-top:4px}
+  input[type=text],input[type=password],input[type=number],input[type=date],input[type=tel],select{
+    width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;
+    background:#fff;font-size:15px;font-family:inherit;color:var(--ink);
+  }
+  input:focus,select:focus{outline:2px solid var(--dancheong-blue);outline-offset:1px;border-color:transparent}
+  .pin-input{letter-spacing:10px;text-align:center;font-size:24px;font-weight:700}
+  /* 생년월일 세그먼트 입력 */
+  .datefield{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:3px 12px}
+  .datefield:focus-within{outline:2px solid var(--dancheong-blue);outline-offset:1px;border-color:transparent}
+  .datefield .seg{border:none;outline:none;background:transparent;padding:9px 2px;font-size:15px;text-align:center;color:var(--ink);font-family:inherit}
+  .datefield #bY{width:60px}
+  .datefield #bM,.datefield #bD{width:40px}
+  .datefield .sep{color:var(--ink-soft);font-weight:600}
+  /* 구별 막대그래프 */
+  .barchart{margin:6px 0 4px;display:flex;flex-direction:column;gap:9px}
+  .bar-row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+  .bar-label{flex:0 0 52px;text-align:right;font-weight:700;color:var(--ink)}
+  .bar-track{flex:1;background:var(--hanji-2);border-radius:7px;height:24px;position:relative;overflow:hidden}
+  .bar-fill{height:100%;border-radius:7px;min-width:3px;transition:width .5s ease}
+  .bar-val{flex:0 0 auto;color:var(--ink-soft);font-size:11.5px;white-space:nowrap}
+  .bar-val b{color:var(--ink)}
+  /* 기존 수령 내역 패널 */
+  .histbox{display:none;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:#fff;font-size:12.5px}
+  #eligCheck{margin-top:7px;padding:9px 12px;border-radius:9px;background:var(--hanji-2);font-size:13px;line-height:1.55}
+  .sales-row{display:flex;gap:8px;margin-bottom:6px}
+  .sales-row .sStore{flex:1.6}
+  .sales-row .sStore.bad{border-color:var(--dancheong-red);background:#fbeae6}
+  .sales-warn{display:none;margin-top:6px;font-size:12.5px;color:var(--dancheong-red);font-weight:700}
+  .sales-warn.show{display:block}
+  .sales-row .sAmt{flex:1;text-align:right}
+  .sales-total{margin-top:6px;font-size:14px;text-align:right;color:var(--ink)}
+  .sales-total b{color:var(--dancheong-red);font-size:16px}
+  #eligCheck.elig-ok{background:#e9f3f1;border:1px solid #bfe0d9}
+  #eligCheck.elig-no{background:#fbeae6;border:1px solid #eccabf}
+  .histbox.show{display:block}
+  .histbox .h-title{font-weight:700;margin-bottom:6px}
+  .histbox .h-item{display:flex;justify-content:space-between;color:var(--ink-soft);padding:2px 0}
+  .histbox .h-sum{border-top:1px dashed var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-weight:700}
+  .histbox .h-next{margin-top:6px;color:var(--dancheong-blue);font-weight:700}
+  .histbox .h-warn{margin-top:8px;color:var(--dancheong-red);font-weight:700;line-height:1.4}
+  .histbox.cap{border-color:var(--dancheong-red);background:#fbeae6}
+  /* 대표 관리자 전용 열 */
+  .mcol{display:none}
+  body.is-master .mcol{display:table-cell}
+  .mfilter{display:none}
+  body.is-master .mfilter{display:inline-block}
+  .mblock{display:none}
+  body.is-master .mblock{display:block}
+  .danger-zone{margin-top:16px;border:1px solid var(--dancheong-red);border-radius:12px;padding:14px;background:#fbeae6}
+  .budget-bar{border-radius:12px;padding:12px 14px;margin-bottom:4px;background:var(--hanji-2);border:1px solid var(--line);font-size:13px}
+  .budget-bar .bhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .budget-bar .btrack{height:9px;border-radius:6px;background:#e6ddc9;overflow:hidden}
+  .budget-bar .bfill{height:100%;border-radius:6px;transition:width .3s}
+  .budget-bar .bsub{margin-top:8px;font-size:12px;color:var(--ink-soft);line-height:1.6}
+  /* 접수 폼: 휴대폰=1열(기존과 동일), 태블릿·PC=2열 */
+  .form-grid{display:contents}
+  @media(min-width:700px){
+    .wrap{max-width:900px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:22px;row-gap:4px;align-items:start}
+    .form-grid .field{display:block}
+    .form-grid .field label{margin-top:10px}
+    .form-grid .wide{grid-column:1 / -1}
+    .tier-row{margin-top:2px}
+  }
+  /* 내 계정 모달 */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(43,42,38,.45);z-index:100;padding:20px;overflow:auto}
+  .modal-overlay.show{display:flex;align-items:flex-start;justify-content:center}
+  .modal-card{background:var(--paper);border-radius:16px;max-width:400px;width:100%;margin-top:6vh;padding:22px;box-shadow:var(--shadow)}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .modal-x{background:none;border:none;font-size:18px;color:var(--ink-soft);cursor:pointer;padding:4px 8px}
+  .modal-x:hover{color:var(--ink)}
+  .acct-info{background:var(--hanji-2);border-radius:10px;padding:12px 14px;font-size:13.5px}
+  .acct-info div{display:flex;justify-content:space-between;padding:3px 0}
+  .acct-info span{color:var(--ink-soft)}
+  .modal-sec{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+  .modal-sec h4{font-size:14px;margin:0 0 10px;font-weight:700}
+  .modal-sec input{margin-bottom:8px}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;font-weight:700}
+  .btn{width:100%;padding:14px;background:var(--ink);color:#fff;font-size:15px;margin-top:18px}
+  .btn:hover{background:#000}
+  .btn-blue{background:var(--dancheong-blue)}
+  .btn-blue:hover{filter:brightness(1.06)}
+  .btn-ghost{background:transparent;color:var(--ink-soft);font-size:13px;margin-top:10px;padding:8px;width:100%}
+  .btn-ghost:hover{color:var(--ink)}
+  .btn-sm{padding:9px 14px;font-size:13px;width:auto;margin:0}
+  /* 탭 */
+  nav.tabs{display:flex;gap:6px;background:var(--hanji-2);padding:5px;border-radius:12px;border:1px solid var(--line);margin-bottom:18px}
+  nav.tabs button{flex:1;padding:11px 6px;background:transparent;color:var(--ink-soft);font-size:13.5px;border-radius:9px}
+  nav.tabs button.on{background:var(--paper);color:var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.06)}
+  /* 쿠폰 안내 */
+  .tier-row{display:flex;gap:12px;margin:4px 0 8px}
+  .tier{flex:1;border:1.5px dashed var(--line);border-radius:12px;padding:14px;text-align:center;background:#fff;position:relative}
+  .tier b{display:block;font-size:12px;color:var(--ink-soft);font-weight:500}
+  .tier .amt{font-family:"Gowun Batang",serif;font-size:22px;font-weight:700;margin-top:4px}
+  .tier.t5 .amt{color:var(--dancheong-blue)}
+  .tier.t10 .amt{color:var(--dancheong-red)}
+  /* 동의 */
+  .consent{display:flex;gap:10px;align-items:flex-start;margin-top:18px;background:var(--hanji-2);padding:13px;border-radius:10px}
+  .consent input{margin-top:3px;width:18px;height:18px;flex:0 0 18px}
+  .consent label{margin:0;font-weight:500;font-size:12.5px;color:var(--ink-soft)}
+  details.terms{margin-top:8px;font-size:12px;color:var(--ink-soft)}
+  details.terms summary{cursor:pointer;color:var(--dancheong-blue);font-weight:600}
+  /* 결과 토스트 */
+  .result{margin-top:16px;padding:16px;border-radius:12px;font-size:14px;display:none;animation:pop .25s ease}
+  @keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+  .result.show{display:block}
+  .result.ok{background:#e9f3f1;border:1px solid var(--dancheong-blue);color:#14524e}
+  .result.dup{background:#f7e7e3;border:1px solid var(--dancheong-red);color:#7e2516}
+  .result .big{font-family:"Gowun Batang",serif;font-size:20px;font-weight:700;display:block;margin-bottom:4px}
+  .result .next-btn{margin-top:12px;background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700}
+  .result .next-btn:hover{background:#000}
+  /* 통계 */
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
+  .stat .k{font-size:12px;color:var(--ink-soft)}
+  .stat .v{font-family:"Gowun Batang",serif;font-size:26px;font-weight:700;margin-top:3px}
+  .stat.total{grid-column:1/-1;background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .stat.total .k{color:#cfc8ba}
+  .stat.total .v{color:#fff;font-size:30px}
+  .stat .sub{font-size:11.5px;color:var(--dancheong-gold);margin-top:2px}
+  /* 데이터 표 */
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .toolbar .grow{flex:1;min-width:120px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--line)}
+  th{font-size:11.5px;color:var(--ink-soft);font-weight:700;background:var(--hanji-2)}
+  td .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+  .pill5{background:#e9f3f1;color:var(--dancheong-blue)}
+  .pill10{background:#f7e7e3;color:var(--dancheong-red)}
+  .del{background:none;color:var(--ink-soft);font-size:12px;padding:4px 6px;width:auto;margin:0}
+  .del:hover{color:var(--dancheong-red)}
+  .empty{text-align:center;padding:36px 10px;color:var(--ink-soft);font-size:13px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .logout{background:none;color:var(--ink-soft);font-size:12px;padding:6px 10px;width:auto;margin:0}
+  code{background:var(--hanji-2);padding:2px 6px;border-radius:5px;font-size:12px}
+  pre{background:#2b2a26;color:#e9e3d6;padding:14px;border-radius:10px;overflow:auto;font-size:12px;line-height:1.5}
+  .note{font-size:12.5px;color:var(--ink-soft);background:var(--hanji-2);padding:12px;border-radius:10px;margin-top:12px}
+  .err{color:var(--dancheong-red);font-size:12.5px;margin-top:8px;font-weight:600;min-height:16px}
+  @media(max-width:480px){
+    .tier-row{flex-direction:column}
+    header.top h1{font-size:18px}
+    th:nth-child(2),td:nth-child(2){display:none} /* 좁은 화면: 생년월일 숨김 */
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="seal">페이<br>백</div>
+    <div>
+      <h1>가공식품 페이백 행사</h1>
+      <p id="marketName">상품권 지급 접수 · 관리 시스템</p>
+    </div>
+  </header>
+
+  <!-- ===== 0. 설정 안내 화면 ===== -->
+  <section id="setupScreen" class="screen">
+    <div class="card pad">
+      <h2 style="font-family:'Gowun Batang',serif;margin-top:0">초기 설정이 필요합니다</h2>
+      <p style="font-size:13.5px;color:var(--ink-soft)">아래 <code>CONFIG</code> 영역에 Firebase 정보를 입력한 뒤 GitHub에 올려 주세요. 설정 방법은 화면 맨 아래 안내를 참고하세요.</p>
+      <div class="note">파일 상단의 <code>FIREBASE_CONFIG</code> 값이 아직 예시(<code>여기에...</code>) 상태입니다. 실제 값으로 바꾸면 이 화면 대신 로그인 화면이 나타납니다.</div>
+    </div>
+  </section>
+
+  <!-- ===== 1. 로그인 화면 ===== -->
+  <section id="loginScreen" class="screen">
+    <div class="card pad center-card">
+      <h2 style="font-family:'Gowun Batang',serif;margin:0 0 4px;text-align:center">관리자 로그인</h2>
+      <p style="text-align:center;font-size:12.5px;color:var(--ink-soft);margin-top:0">이메일과 비밀번호를 입력하세요</p>
+      <label for="emailInput">이메일</label>
+      <input id="emailInput" type="email" inputmode="email" placeholder="operator@example.com" autocomplete="username" />
+      <label for="pwInput">비밀번호</label>
+      <input id="pwInput" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" />
+      <div id="loginErr" class="err"></div>
+      <button id="loginBtn" class="btn btn-blue">로그인</button>
+      <button id="forgotBtn" class="btn-ghost">비밀번호를 잊으셨나요? 재설정 메일 받기</button>
+      <button id="setupPinBtn" class="btn-ghost">처음이신가요? 관리자 계정 등록하기</button>
+    </div>
+  </section>
+
+  <!-- ===== 1-b. 승인 대기 화면 ===== -->
+  <section id="approvalScreen" class="screen">
+    <div class="card pad center-card" style="text-align:center">
+      <div style="font-size:34px;margin-bottom:6px">⏳</div>
+      <h2 style="font-family:'Gowun Batang',serif;margin:0 0 6px">승인 대기 중</h2>
+      <p style="font-size:13.5px;color:var(--ink-soft);margin:0 0 4px">가입이 접수되었습니다. <b>대표 관리자 승인</b> 후 이용할 수 있습니다.</p>
+      <p id="approvalEmail" style="font-size:12.5px;color:var(--ink-soft);margin:0 0 16px"></p>
+      <button id="approvalRefresh" class="btn btn-blue">승인 여부 새로고침</button>
+      <button id="approvalLogout" class="btn-ghost">로그아웃</button>
+    </div>
+  </section>
+
+  <!-- ===== 2. 메인 앱 ===== -->
+  <section id="appScreen" class="screen">
+    <div class="topbar">
+      <span id="roleTag" style="font-size:12px;color:var(--ink-soft)">● 연결됨</span>
+      <div style="display:flex;gap:6px">
+        <button id="acctBtn" class="logout">내 계정</button>
+        <button id="logoutBtn" class="logout">로그아웃</button>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button data-tab="entry" class="on">신청 접수</button>
+      <button data-tab="stats">집계 현황</button>
+      <button data-tab="data">데이터 관리</button>
+    </nav>
+
+    <!-- 탭1: 접수 -->
+    <div id="tab-entry" class="tabpane">
+      <div class="card pad">
+        <div class="form-grid">
+          <div id="budgetBar" class="wide budget-bar"></div>
+          <div class="tier-row wide">
+            <div class="tier t5"><b>34,000원 이상 구매</b><span class="amt">온누리 1만원</span></div>
+            <div class="tier t10"><b>67,000원 이상 구매</b><span class="amt">온누리 2만원</span></div>
+          </div>
+
+          <datalist id="storeOptions"></datalist>
+
+          <div class="field">
+            <label for="fDate">신청일자</label>
+            <input id="fDate" type="date" />
+          </div>
+
+          <div class="field">
+            <label for="fName">이름</label>
+            <input id="fName" type="text" placeholder="홍길동" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="bY">생년월일</label>
+            <div class="datefield">
+              <input id="bY" class="seg" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" autocomplete="off" />
+              <span class="sep">-</span>
+              <input id="bM" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="MM" autocomplete="off" />
+              <span class="sep">-</span>
+              <input id="bD" class="seg" type="text" inputmode="numeric" maxlength="2" placeholder="DD" autocomplete="off" />
+            </div>
+            <div class="hint" id="eligCheck">이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.</div>
+          </div>
+
+          <div class="field">
+            <label for="fPhone">휴대폰 번호</label>
+            <input id="fPhone" type="tel" inputmode="numeric" placeholder="010-1234-5678" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="fDistrict">거주 지역 (구)</label>
+            <select id="fDistrict">
+              <option value="">구 선택</option>
+              <option value="동구">동구</option>
+              <option value="중구">중구</option>
+              <option value="서구">서구</option>
+              <option value="유성구">유성구</option>
+              <option value="대덕구">대덕구</option>
+              <option value="그 외">그 외 (타지역)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="fAddress">상세주소 <span style="font-weight:400;color:var(--ink-soft)">(선택)</span></label>
+            <input id="fAddress" type="text" placeholder="예: ○○동 ○○아파트" autocomplete="off" />
+          </div>
+
+          <div class="field wide">
+            <label>매출현황 (점포별 구매금액 · 최대 5곳)</label>
+            <div id="salesRows">
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명1 (자동완성)" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액1" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명2" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액2" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명3" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액3" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명4" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액4" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명5" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액5" autocomplete="off" /></div>
+            </div>
+            <div class="sales-total" id="salesTotal">구매금액 합계: <b>0원</b></div>
+            <div id="salesStoreMsg" class="sales-warn"></div>
+            <div class="hint" id="couponPreview">점포별 금액을 입력하면 합계·지급액이 표시됩니다.</div>
+          </div>
+
+          <div class="wide"><div id="historyBox" class="histbox"></div></div>
+
+          <div class="wide">
+            <div class="consent">
+              <input id="fConsent" type="checkbox" />
+              <label for="fConsent"><b style="color:var(--ink)">[필수]</b> 개인정보 수집·이용에 동의합니다. (상품권 지급 및 중복 확인 목적)</label>
+            </div>
+            <div class="consent" style="margin-top:8px">
+              <input id="fMarketing" type="checkbox" />
+              <label for="fMarketing"><b style="color:var(--dancheong-blue)">[선택]</b> 사후 시장 페이백 행사 등 문창백년전통시장 행사 알림 수신에 동의합니다.</label>
+            </div>
+            <details class="terms">
+              <summary>수집 항목 및 안내 보기</summary>
+              <p>• 수집 항목: 이름, 생년월일, 휴대폰 번호, 거주 지역(구)·주소, 구매금액<br>
+                 • 이용 목적: 페이백 상품권 지급 및 회차별 중복 지급 방지<br>
+                 • 지급 기준: 34,000원↑ 온누리 1만원 / 67,000원↑ 온누리 2만원, 1인 행사기간 누적 2만원 한도 (한도 도달 시 참여 종료)<br>
+                 • 보관 기간: 행사 종료 및 정산 완료 후 지체 없이 파기<br>
+                 • [필수] 동의를 거부할 권리가 있으며, 거부 시 상품권 지급이 제한됩니다.<br>
+                 • [선택] 행사 알림 수신: 향후 문창백년전통시장 페이백·행사 안내를 휴대폰으로 받기 위한 동의로, <b>동의하지 않아도 상품권 지급에는 영향이 없습니다.</b> 수신 동의 정보는 동의 철회 또는 행사 종료 시까지 보관 후 파기합니다.</p>
+            </details>
+          </div>
+
+          <div class="wide" style="display:flex;gap:8px;margin-top:14px">
+            <button id="submitBtn" class="btn btn-blue" style="flex:1;margin-top:0">지급 접수하기</button>
+            <button id="resetBtn" class="btn" style="flex:0 0 auto;width:auto;margin-top:0;padding:14px 18px;background:var(--ink-soft)">초기화</button>
+          </div>
+          <div id="entryResult" class="result wide"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 탭2: 통계 -->
+    <div id="tab-stats" class="tabpane" style="display:none">
+      <div class="card pad">
+        <div class="toolbar">
+          <select id="statYear"></select>
+          <select id="statOperator" class="mfilter"></select>
+          <select id="statScope" class="grow">
+            <option value="day">선택한 날짜</option>
+            <option value="all">연도 전체 기간</option>
+          </select>
+          <input id="statDate" type="date" class="grow" />
+        </div>
+        <div class="stat-grid">
+          <div class="stat"><div class="k" id="statScopeLabel">신청 인원</div><div class="v" id="sCount">0</div><div class="sub">명</div></div>
+          <div class="stat"><div class="k">온누리 1만원권</div><div class="v" id="sVouchers">0<span style="font-size:14px">장</span></div><div class="sub" id="sVoucherNote">-</div></div>
+          <div class="stat total"><div class="k" id="sTotalLabel">총 지급 금액</div><div class="v" id="sTotal">0원</div></div>
+          <div class="stat"><div class="k">남은 예산</div><div class="v" id="sRemain">0원</div><div class="sub" id="sRemainNote">하루 예산 기준</div></div>
+        </div>
+        <div id="acctSection" style="display:none">
+          <h3 style="font-family:'Gowun Batang',serif;font-size:15px;margin:22px 0 10px">계정(담당자)별 집계</h3>
+          <div style="overflow-x:auto">
+            <table>
+              <thead><tr><th>담당자</th><th style="text-align:right">건수</th><th style="text-align:right">구매금액</th><th style="text-align:right">지급금액</th></tr></thead>
+              <tbody id="acctBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <h3 style="font-family:'Gowun Batang',serif;font-size:15px;margin:22px 0 10px">구별 집계</h3>
+        <div id="districtChart" class="barchart"></div>
+        <div style="overflow-x:auto;margin-top:14px">
+          <table>
+            <thead><tr><th>거주 지역</th><th style="text-align:right">인원</th><th style="text-align:right">지급액</th></tr></thead>
+            <tbody id="districtBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 탭3: 데이터 -->
+    <div id="tab-data" class="tabpane" style="display:none">
+      <div class="card pad">
+        <div class="toolbar">
+          <input id="search" type="text" placeholder="이름·전화번호 검색" class="grow" />
+          <select id="dataYear"></select>
+          <select id="dataOperator" class="mfilter"></select>
+          <select id="dataDistrict">
+            <option value="">전체 지역</option>
+            <option value="동구">동구</option>
+            <option value="중구">중구</option>
+            <option value="서구">서구</option>
+            <option value="유성구">유성구</option>
+            <option value="대덕구">대덕구</option>
+            <option value="그 외">그 외</option>
+          </select>
+          <input id="dataDate" type="date" />
+          <button id="exportBtn" class="btn-sm btn-blue" style="color:#fff">엑셀 내보내기</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>일자</th><th>입력시각</th><th>생년월일</th><th>이름</th><th>지역</th><th>연락처</th><th>금액</th><th>쿠폰</th><th class="mcol">입력자</th><th></th></tr></thead>
+            <tbody id="dataBody"></tbody>
+          </table>
+        </div>
+        <div id="dataEmpty" class="empty">접수된 데이터가 없습니다.</div>
+        <div class="note">표에서는 개인정보 보호를 위해 이름·연락처 일부가 가려집니다. 엑셀 내보내기에는 전체 정보가 포함되니 취급에 유의하세요.</div>
+
+        <div class="mblock danger-zone">
+          <h4 style="margin:0 0 4px;font-size:14px;color:var(--dancheong-red)">기간 데이터 삭제 · 대표 전용</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px">되돌릴 수 없습니다. 삭제 전 엑셀 내보내기로 백업을 권장합니다.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <span style="font-size:12.5px;font-weight:700">월별</span>
+            <input id="delMonth" type="month" style="width:auto" />
+            <button id="delMonthBtn" class="btn-sm" style="background:var(--dancheong-red);color:#fff">이 달 삭제</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            <span style="font-size:12.5px;font-weight:700">기간</span>
+            <input id="delFrom" type="date" style="width:auto" />
+            <span>~</span>
+            <input id="delTo" type="date" style="width:auto" />
+            <button id="delRangeBtn" class="btn-sm" style="background:var(--dancheong-red);color:#fff">이 기간 삭제</button>
+          </div>
+          <div style="border-top:1px dashed var(--line);padding-top:10px;margin-top:6px">
+            <button id="delAllBtn" class="btn-sm" style="background:#7e2516;color:#fff">전체 데이터 삭제</button>
+            <span style="font-size:11.5px;color:var(--ink-soft);margin-left:8px">모든 접수 기록을 삭제합니다.</span>
+          </div>
+          <div id="bulkMsg" class="err" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 내 계정 모달 -->
+    <div id="acctModal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 style="font-family:'Gowun Batang',serif;margin:0;font-size:18px">내 계정</h3>
+          <button id="acctClose" class="modal-x">✕</button>
+        </div>
+        <div class="acct-info">
+          <div><span>이메일</span><b id="acctEmail">-</b></div>
+          <div><span>권한</span><b id="acctRole">-</b></div>
+        </div>
+
+        <div class="modal-sec" id="pendingSec" style="display:none">
+          <h4>가입 승인 대기</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">새로 가입한 담당자를 승인해야 업무에 투입됩니다.</p>
+          <div id="pendingList"></div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <input id="approveEmail" type="email" placeholder="이메일로 직접 승인" style="flex:1;margin-bottom:0" autocomplete="off" />
+            <button id="approveAddBtn" class="btn-sm btn-blue" style="color:#fff">승인 추가</button>
+          </div>
+          <div id="pendingMsg" class="err"></div>
+        </div>
+
+        <div class="modal-sec" id="budgetSec" style="display:none">
+          <h4>일일 예산 한도</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">하루 상품권 지급 예산입니다. 접수 화면 예산바와 집계의 "남은 예산" 기준이 됩니다. (초과해도 접수는 차단되지 않고 표시만 됩니다)</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <input id="budgetInput" type="text" inputmode="numeric" placeholder="예: 3,000,000" style="flex:1;min-width:140px;margin-bottom:0" autocomplete="off" />
+            <span style="font-size:13px;color:var(--ink-soft)">원</span>
+            <button id="budgetSaveBtn" class="btn-sm btn-blue" style="color:#fff">저장</button>
+          </div>
+          <div id="budgetMsg" class="err"></div>
+        </div>
+
+        <div class="modal-sec" id="storeSec" style="display:none">
+          <h4>상인회 점포 명단 관리</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">엑셀(1열: 점포명, 2열: 업종) 업로드 또는 직접 추가한 점포가 입력창에서 자동완성됩니다. <span id="storeCount">0</span>곳 등록 · <span id="storeCatNote" style="color:var(--dancheong-red)"></span></p>
+          <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+            <input id="newStore" type="text" placeholder="점포명 직접 추가" style="flex:1;min-width:120px;margin-bottom:0" autocomplete="off" />
+            <select id="newStoreCat" style="width:auto"></select>
+            <button id="addStoreBtn" class="btn-sm btn-blue" style="color:#fff">추가</button>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <label for="storeFile" class="btn-sm" style="background:var(--dancheong-blue);color:#fff;cursor:pointer;margin:0">엑셀 업로드</label>
+            <input id="storeFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" />
+            <button id="downStoresBtn" class="btn-sm" style="background:var(--dancheong-teal,var(--dancheong-blue));color:#fff">엑셀 내려받기</button>
+            <button id="clearStoresBtn" class="btn-sm" style="background:var(--hanji-2);color:var(--dancheong-red)">전체 초기화</button>
+          </div>
+          <div id="storeList" style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px"></div>
+          <div id="storeMsg" class="err"></div>
+        </div>
+
+        <div class="modal-sec" id="masterMgmtSec" style="display:none">
+          <h4>대표 관리자 지정</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">등록된 담당자 중 대표 관리자를 지정/해제합니다. 대표는 전체·계정별 집계를 볼 수 있습니다.</p>
+          <div id="masterList"></div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <input id="newMasterEmail" type="email" placeholder="이메일로 직접 추가" style="flex:1;margin-bottom:0" autocomplete="off" />
+            <button id="addMasterBtn" class="btn-sm btn-blue" style="color:#fff">대표 추가</button>
+          </div>
+          <div id="masterMsg" class="err"></div>
+        </div>
+
+        <div class="modal-sec">
+          <h4>비밀번호 변경</h4>
+          <input id="curPw" type="password" placeholder="현재 비밀번호" autocomplete="current-password" />
+          <input id="newPw1" type="password" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" />
+          <input id="newPw2" type="password" placeholder="새 비밀번호 확인" autocomplete="new-password" />
+          <button id="changePwBtn" class="btn btn-blue" style="margin-top:12px">비밀번호 변경</button>
+          <div id="acctMsg" class="err"></div>
+        </div>
+
+        <div class="modal-sec">
+          <h4>비밀번호를 잊으셨나요?</h4>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 8px">가입한 이메일로 재설정 링크를 보내드립니다.</p>
+          <button id="resetMailBtn" class="btn" style="margin-top:0;background:var(--ink-soft)">재설정 메일 받기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 상품권 금액 수정 모달 -->
+    <div id="editModal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3 style="font-family:'Gowun Batang',serif;margin:0;font-size:18px">접수 내역 수정</h3>
+          <button id="editClose" class="modal-x">✕</button>
+        </div>
+        <div class="acct-info">
+          <div><span>신청일자</span><b id="edDate">-</b></div>
+          <div><span>입력시각</span><b id="edTime">-</b></div>
+          <div><span>생년월일</span><b id="edBirth">-</b></div>
+          <div><span>현재 지급액</span><b id="edCur">-</b></div>
+        </div>
+        <div class="modal-sec">
+          <h4>이름 수정</h4>
+          <input id="edName" type="text" placeholder="이름" autocomplete="off" />
+          <div class="hint" id="edNameHint">이름을 고치면 중복·누적 한도 기준도 함께 옮겨집니다.</div>
+        </div>
+        <div class="modal-sec">
+          <h4>구매금액 수정</h4>
+          <input id="edAmountInput" type="text" inputmode="numeric" placeholder="구매금액 (원)" autocomplete="off" />
+          <div class="hint" id="edAmountHint">구매금액을 바꾸면 기준 지급액이 안내됩니다.</div>
+        </div>
+        <div class="modal-sec">
+          <h4>수정할 지급액</h4>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <button class="btn-sm ed-quick" data-v="10000" style="background:var(--hanji-2)">10,000원</button>
+            <button class="btn-sm ed-quick" data-v="20000" style="background:var(--hanji-2)">20,000원</button>
+            <button class="btn-sm ed-quick" data-v="0" style="background:var(--hanji-2)">0원 (미지급)</button>
+          </div>
+          <input id="edValue" type="text" inputmode="numeric" placeholder="직접 입력 (원)" autocomplete="off" />
+          <div class="hint" id="edHint">지급액을 고치면 누적 한도와 예산 집계도 자동으로 조정됩니다.</div>
+          <button id="edSaveBtn" class="btn btn-blue" style="margin-top:12px">수정 저장</button>
+          <div id="edMsg" class="err"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
+  sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, getDocs, setDoc, onSnapshot, serverTimestamp, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ===================================================================
+   CONFIG ─ Firebase 콘솔의 firebaseConfig 값을 여기에 붙여넣으세요.
+   =================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAkCCCnAs89gwyZgTW0TJ4YYoLjzrUpJn4",
+  authDomain: "payback-d0b59.firebaseapp.com",
+  projectId: "payback-d0b59",
+  storageBucket: "payback-d0b59.firebasestorage.app",
+  messagingSenderId: "662634472975",
+  appId: "1:662634472975:web:813a64bdb9e4b87bd9a57a"
+};
+const ADMIN_EMAIL = "operator@payback.market";   // (참고용) 더 이상 강제 사용되지 않음 — 로그인 화면에서 직접 입력
+const COLLECTION = "applications_food";           // ★ 가공식품 전용 저장공간(기존 페이백과 분리)
+const MARKET_NAME = "문창백년전통시장 가공식품";  // 화면 표기용(자유 변경)
+const PAYOUT_CAP = 20000;                         // 1인당 행사 기간 누적 지급 한도(원) — 온누리상품권
+const DAILY_BUDGET = 3000000;                     // 하루 상품권 지급 예산(원) — 초과해도 차단하지 않고 여유분 표시용
+const MASTER_EMAILS = ["kimsketch@naver.com"];    // ★ 대표 관리자 이메일(전체 집계 권한). 여러 명이면 쉼표로 추가
+/* =================================================================== */
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const won = n => Number(n||0).toLocaleString("ko-KR");
+/* 입력시각(서버 기록) 표시용 — 시:분:초 */
+const p2 = n => String(n).padStart(2,"0");
+const tsDate = ts => (ts && typeof ts.seconds==="number") ? new Date(ts.seconds*1000) : null;
+const fmtTime = ts => { const d=tsDate(ts); return d ? `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}` : ""; };
+const fmtDateTime = ts => { const d=tsDate(ts); return d ? `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}` : ""; };
+const show = id => { document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active")); $(id).classList.add("active"); };
+
+document.getElementById("marketName").textContent = MARKET_NAME + " · 상품권 지급 접수";
+
+// 설정 미완료 감지
+if (FIREBASE_CONFIG.apiKey.startsWith("여기에")) {
+  show("setupScreen");
+} else {
+  startApp();
+}
+
+function startApp(){
+  const app = initializeApp(FIREBASE_CONFIG);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const col = collection(db, COLLECTION);
+
+  let records = [];     // 실시간 캐시
+  let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0;
+  let dailyBudget = DAILY_BUDGET;              // 일일 예산 한도(설정에서 변경 가능, Firebase 공유)
+  let storeList = [], storeUnsub = null;
+  const STORE_ID = "_stores";                  // 상인회 점포 명단 저장 문서(applications 내)
+  const STORE_CATS = ["농산물","수산물","축산물","가공식품","반찬","떡·방앗간","식당","의류","신발·가방","잡화","생활용품","화훼","서비스","기타"];
+  const sName = s => (typeof s==="string" ? s : (s&&s.name)||"").trim();
+  const sCat  = s => (typeof s==="string" ? "" : (s&&s.cat)||"").trim();
+  const normStoreObj = s => ({ name:sName(s), cat:sCat(s) });
+  let currentUid = null, currentEmail = "", isMaster = false, isApproved = false;
+  let dynamicMasters = [], approvedOps = [], pendingOps = [];
+  const bootstrapMasters = MASTER_EMAILS.map(e=>String(e||"").toLowerCase());
+  const CFG_ID = "_config_admins";              // 대표 목록 + 담당자 승인 정보 저장 문서(applications 내)
+  const todayStr = ()=> new Date().toLocaleDateString("sv-SE");   // YYYY-MM-DD (로컬)
+
+  /* ---------- 인증 + 역할 + 승인 ---------- */
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      currentUid = user.uid;
+      currentEmail = user.email || "";
+      resetIdle();
+      applyAccess();                            // 우선 파일 지정(부트스트랩) 기준 적용
+      if (cfgUnsub) cfgUnsub();
+      cfgUnsub = onSnapshot(doc(db,COLLECTION,CFG_ID),
+        snap => {
+          const d = snap.exists() ? snap.data() : {};
+          dynamicMasters = (Array.isArray(d.masters)? d.masters:[]).map(e=>String(e||"").toLowerCase());
+          approvedOps   = (Array.isArray(d.approved)? d.approved:[]).map(e=>String(e||"").toLowerCase());
+          pendingOps    = (Array.isArray(d.pending)? d.pending:[]).map(e=>String(e||"").toLowerCase());
+          dailyBudget   = (typeof d.dailyBudget==="number" && d.dailyBudget>0) ? d.dailyBudget : DAILY_BUDGET;
+          applyAccess();
+          renderBudgetBar(); renderStats();
+          if (acctModal.classList.contains("show")){ renderMasterList(); renderPendingList(); renderBudgetSetting(); }
+        },
+        ()  => { dynamicMasters=[]; approvedOps=[]; pendingOps=[]; applyAccess(); });
+      if (storeUnsub) storeUnsub();
+      storeUnsub = onSnapshot(doc(db,COLLECTION,STORE_ID),
+        snap => { storeList = (snap.exists() && Array.isArray(snap.data().stores) ? snap.data().stores : []).map(normStoreObj).filter(s=>s.name); populateStoreDatalist(); if (acctModal.classList.contains("show")) renderStoreList(); checkStore(); if(document.querySelector("#salesRows .sStore")) checkSalesStores(); },
+        ()  => { storeList = []; populateStoreDatalist(); });
+    } else {
+      currentUid = null; currentEmail = ""; isMaster = false; isApproved = false;
+      document.body.classList.remove("is-master");
+      if (unsub) { unsub(); unsub=null; }
+      if (cfgUnsub) { cfgUnsub(); cfgUnsub=null; }
+      if (storeUnsub) { storeUnsub(); storeUnsub=null; }
+      if (budgetUnsub) { budgetUnsub(); budgetUnsub=null; }
+      clearTimeout(idleTimer);
+      show("loginScreen");
+    }
+  });
+
+  function applyAccess(){
+    const em = currentEmail.toLowerCase();
+    const wasMaster = isMaster;
+    isMaster = bootstrapMasters.includes(em) || dynamicMasters.includes(em);
+    isApproved = isMaster || approvedOps.includes(em);
+    if (!isApproved){                            // 승인 전 담당자 → 대기 화면
+      document.body.classList.remove("is-master");
+      if (unsub){ unsub(); unsub=null; }
+      $("approvalEmail").textContent = currentEmail;
+      show("approvalScreen");
+      return;
+    }
+    // 승인됨 → 앱 진입
+    document.body.classList.toggle("is-master", isMaster);
+    $("roleTag").textContent = (isMaster ? "● 대표 관리자" : "● 담당자") + " · " + currentEmail;
+    $("acctSection").style.display = isMaster ? "block" : "none";
+    const firstEntry = !$("appScreen").classList.contains("active");
+    show("appScreen");
+    if (firstEntry) todayDefaults();
+    if (unsub===null || wasMaster!==isMaster){ if(unsub){unsub();unsub=null;} subscribe(); }
+    subscribeBudget();
+  }
+
+  /* ---------- 오늘 예산 실시간 구독 ---------- */
+  function subscribeBudget(){
+    if (budgetUnsub) return;                     // 이미 구독 중
+    const bref = doc(db,COLLECTION,"budget_"+todayStr());
+    budgetUnsub = onSnapshot(bref,
+      snap => { todayBudget = (snap.exists() && snap.data().issued) ? snap.data().issued : 0; renderBudgetBar(); },
+      ()   => { todayBudget = 0; renderBudgetBar(); });
+  }
+  function renderBudgetBar(){
+    const el = $("budgetBar"); if(!el) return;
+    const used = todayBudget, rem = dailyBudget - used;
+    const pct = Math.min(100, Math.round(used/dailyBudget*100));
+    const over = rem < 0;
+    const barColor = over ? "var(--dancheong-red)" : pct>=80 ? "#d9822b" : "var(--dancheong-blue)";
+    const remLine = over
+      ? `<b style="color:var(--dancheong-red)">예산 초과(여유분 사용) ${won(-rem)}원 초과</b> · 지급 계속 가능`
+      : `여유 예산 <b style="color:var(--dancheong-blue)">${won(rem)}원</b> — 1만원권 <b>${Math.floor(rem/10000)}장</b> 지급 가능`;
+    el.innerHTML = `
+      <div class="bhead"><span><b>오늘 상품권 지급</b> (${todayStr()})</span><span><b>${won(used)}</b> / ${won(dailyBudget)}원</span></div>
+      <div class="btrack"><div class="bfill" style="width:${pct}%;background:${barColor}"></div></div>
+      <div class="bsub">${remLine}</div>`;
+  }
+
+  $("loginBtn").onclick = async () => {
+    const email = $("emailInput").value.trim();
+    const pw = $("pwInput").value;
+    $("loginErr").textContent = "";
+    if (!email || !pw) { $("loginErr").textContent = "이메일과 비밀번호를 입력하세요."; return; }
+    try { await signInWithEmailAndPassword(auth, email, pw); }
+    catch(e){
+      $("loginErr").textContent = (e.code==="auth/invalid-credential" || e.code==="auth/wrong-password" || e.code==="auth/user-not-found")
+        ? "이메일 또는 비밀번호가 올바르지 않습니다." : "로그인 실패: " + e.code;
+    }
+  };
+  $("setupPinBtn").onclick = async () => {
+    const email = $("emailInput").value.trim();
+    const pw = $("pwInput").value;
+    $("loginErr").textContent = "";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $("loginErr").textContent = "올바른 이메일 형식을 입력하세요."; return; }
+    if (pw.length < 6) { $("loginErr").textContent = "비밀번호는 6자 이상이어야 합니다."; return; }
+    try {
+      await createUserWithEmailAndPassword(auth, email, pw);
+      // 대표(부트스트랩)가 아니면 승인 대기 목록에 등록
+      if (!bootstrapMasters.includes(email.toLowerCase())){
+        try { await setDoc(doc(db,COLLECTION,CFG_ID), { config:true, pending: arrayUnion(email.toLowerCase()) }, { merge:true }); } catch(_){}
+      }
+      // 가입 후 자동 로그인 → onAuthStateChanged가 승인여부에 따라 화면 결정
+    }
+    catch(e){
+      $("loginErr").textContent = (e.code==="auth/email-already-in-use")
+        ? "이미 등록된 이메일입니다. 로그인하세요." : "등록 실패: " + e.code;
+    }
+  };
+  $("pwInput").addEventListener("keydown", e=>{ if(e.key==="Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = ()=> signOut(auth);
+  $("approvalLogout").onclick = ()=> signOut(auth);
+  $("approvalRefresh").onclick = ()=> applyAccess();
+
+  /* ---------- 비밀번호 찾기 (로그인 화면) ---------- */
+  $("forgotBtn").onclick = async () => {
+    const email = $("emailInput").value.trim();
+    $("loginErr").textContent = "";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $("loginErr").textContent = "재설정 메일을 받을 이메일을 위 칸에 입력하세요."; return; }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      $("loginErr").style.color = "var(--dancheong-blue)";
+      $("loginErr").textContent = "재설정 메일을 보냈습니다. 메일함(스팸함 포함)을 확인하세요.";
+      setTimeout(()=>{ $("loginErr").style.color=""; }, 100);
+    } catch(e){
+      $("loginErr").style.color = "";
+      $("loginErr").textContent = (e.code==="auth/user-not-found") ? "등록되지 않은 이메일입니다." : "메일 발송 실패: " + e.code;
+    }
+  };
+
+  /* ---------- 내 계정 모달 ---------- */
+  const acctModal = $("acctModal");
+  function openAcct(){
+    $("acctEmail").textContent = currentEmail;
+    $("acctRole").textContent = isMaster ? "대표 관리자" : "담당자";
+    $("curPw").value=""; $("newPw1").value=""; $("newPw2").value="";
+    $("acctMsg").style.color=""; $("acctMsg").textContent="";
+    $("masterMgmtSec").style.display = isMaster ? "block" : "none";
+    $("pendingSec").style.display = isMaster ? "block" : "none";
+    $("storeSec").style.display = isMaster ? "block" : "none";
+    $("budgetSec").style.display = isMaster ? "block" : "none";
+    if (isMaster){ renderMasterList(); renderPendingList(); renderStoreList(); renderBudgetSetting(); }
+    acctModal.classList.add("show");
+  }
+  function closeAcct(){ acctModal.classList.remove("show"); }
+  $("acctBtn").onclick = openAcct;
+  $("acctClose").onclick = closeAcct;
+
+  /* ---------- 대표 관리자 지정 ---------- */
+  function renderMasterList(){
+    $("masterMsg").textContent = "";
+    const used = [...new Set(records.map(r=>r.operatorEmail).filter(Boolean).map(e=>e.toLowerCase()))];
+    const all = [...new Set([...bootstrapMasters, ...dynamicMasters, ...used])].sort();
+    $("masterList").innerHTML = all.length ? all.map(em=>{
+      const isBoot = bootstrapMasters.includes(em);
+      const isDyn = dynamicMasters.includes(em);
+      const on = isBoot || isDyn;
+      const badge = isBoot
+        ? `<span style="font-size:11px;color:var(--dancheong-red)">대표(파일지정·고정)</span>`
+        : `<button class="btn-sm master-toggle" data-email="${esc(em)}" style="background:${on?'var(--dancheong-blue)':'var(--hanji-2)'};color:${on?'#fff':'var(--ink-soft)'}">${on?'대표 ✓':'담당자'}</button>`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px">
+        <span style="overflow:hidden;text-overflow:ellipsis">${esc(em)}${em===currentEmail.toLowerCase()?' <span style="color:var(--ink-soft)">(나)</span>':''}</span>${badge}</div>`;
+    }).join("") : `<div class="hint">아직 접수 기록이 있는 담당자가 없습니다. 아래에서 이메일로 직접 추가하세요.</div>`;
+    $("masterList").querySelectorAll(".master-toggle").forEach(b=>{
+      b.onclick = ()=> toggleMaster(b.dataset.email);
+    });
+  }
+  async function saveMasters(list){
+    await setDoc(doc(db,COLLECTION,CFG_ID), { config:true, masters:list, updatedAt: serverTimestamp() }, { merge:true });
+  }
+
+  /* ---------- 가입 승인 관리 ---------- */
+  function renderPendingList(){
+    const waiting = pendingOps.filter(e=>!approvedOps.includes(e) && !bootstrapMasters.includes(e));
+    $("pendingList").innerHTML = waiting.length ? waiting.map(em=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px">
+        <span style="overflow:hidden;text-overflow:ellipsis">${esc(em)}</span>
+        <span style="display:flex;gap:6px">
+          <button class="btn-sm appr-ok" data-email="${esc(em)}" style="background:var(--dancheong-blue);color:#fff">승인</button>
+          <button class="btn-sm appr-no" data-email="${esc(em)}" style="background:var(--hanji-2);color:var(--ink-soft)">거절</button>
+        </span>
+      </div>`).join("") : `<div class="hint">승인 대기 중인 담당자가 없습니다.</div>`;
+    $("pendingList").querySelectorAll(".appr-ok").forEach(b=> b.onclick=()=>approveOp(b.dataset.email));
+    $("pendingList").querySelectorAll(".appr-no").forEach(b=> b.onclick=()=>rejectOp(b.dataset.email));
+  }
+  async function approveOp(email){
+    const em = email.toLowerCase();
+    try { await setDoc(doc(db,COLLECTION,CFG_ID), { config:true, approved: arrayUnion(em), pending: arrayRemove(em) }, { merge:true }); }
+    catch(e){ alert("승인 실패: "+(e.code||e.message)); }
+  }
+  async function rejectOp(email){
+    const em = email.toLowerCase();
+    if(!confirm(`${em} 님의 가입 요청을 거절(대기 목록에서 제거)할까요?`)) return;
+    try { await setDoc(doc(db,COLLECTION,CFG_ID), { config:true, pending: arrayRemove(em), approved: arrayRemove(em) }, { merge:true }); }
+    catch(e){ alert("처리 실패: "+(e.code||e.message)); }
+  }
+  $("approveAddBtn").onclick = async ()=>{
+    const em = $("approveEmail").value.trim().toLowerCase();
+    $("pendingMsg").style.color="";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ $("pendingMsg").textContent="올바른 이메일을 입력하세요."; return; }
+    if (approvedOps.includes(em) || bootstrapMasters.includes(em)){ $("pendingMsg").textContent="이미 승인된 계정입니다."; return; }
+    try { await approveOp(em); $("approveEmail").value=""; $("pendingMsg").style.color="var(--dancheong-blue)"; $("pendingMsg").textContent="승인되었습니다."; }
+    catch(e){ $("pendingMsg").textContent="승인 실패: "+(e.code||e.message); }
+  };
+
+  /* ---------- 일일 예산 한도 설정 ---------- */
+  function renderBudgetSetting(){
+    const inp=$("budgetInput"); if(!inp) return;
+    inp.value = won(dailyBudget);
+    $("budgetMsg").textContent="";
+  }
+  $("budgetInput").addEventListener("input", ()=>{
+    const d = $("budgetInput").value.replace(/\D/g,"");
+    $("budgetInput").value = d ? Number(d).toLocaleString("ko-KR") : "";
+  });
+  $("budgetSaveBtn").onclick = async ()=>{
+    const v = Number(($("budgetInput").value||"").replace(/\D/g,""));
+    const msg=$("budgetMsg"); msg.style.color="";
+    if(!Number.isFinite(v) || v<=0){ msg.textContent="0보다 큰 금액을 입력하세요."; return; }
+    try {
+      await setDoc(doc(db,COLLECTION,CFG_ID), { config:true, dailyBudget:v, updatedAt: serverTimestamp() }, { merge:true });
+      msg.style.color="var(--dancheong-blue)"; msg.textContent=`일일 예산을 ${won(v)}원으로 저장했습니다.`;
+    } catch(e){ msg.textContent="저장 실패: "+(e.code||e.message); }
+  };
+
+  /* ---------- 상인회 점포 명단 (업종 포함) ---------- */
+  const normStore = s => String(s||"").replace(/\s+/g,"").toLowerCase();
+  const catOptions = sel => {
+    const base = STORE_CATS.slice();
+    if (sel && !base.includes(sel)) base.push(sel);   // 목록에 없는 기존 지정 업종도 보존
+    return ['<option value="">(업종 선택)</option>', ...base.map(c=>`<option value="${c}"${c===sel?" selected":""}>${c}</option>`)].join("");
+  };
+  function findStore(name){ const nv=normStore(name); return storeList.find(s=>normStore(s.name)===nv); }
+  function populateStoreDatalist(){
+    const dl = $("storeOptions"); if(!dl) return;
+    dl.innerHTML = storeList.map(s=>`<option value="${esc(s.name)}">${esc(s.cat)}</option>`).join("");
+    const ns = $("newStoreCat"); if(ns && !ns.dataset.init){ ns.innerHTML = catOptions(""); ns.dataset.init="1"; }
+  }
+  function checkStore(){
+    const el = $("storeCheck"); if(!el) return;
+    const v = $("fStore").value.trim();
+    if (!v){ el.style.color=""; el.textContent = storeList.length ? `등록된 상인회 점포 ${storeList.length}곳 — 점포명 2~3글자 입력` : "등록된 점포가 없습니다. 관리자 설정에서 명단을 등록하세요."; return; }
+    const hit = findStore(v);
+    if (hit){ el.style.color="var(--dancheong-blue)"; el.textContent = `✓ 등록된 상인회 점포입니다${hit.cat?` · 업종: ${hit.cat}`:" (업종 미지정)"}`; return; }
+    const nv = normStore(v);
+    const hits = storeList.filter(s=>normStore(s.name).includes(nv));
+    if (hits.length){ el.style.color=""; el.textContent=`검색된 점포 ${hits.length}곳: ${hits.slice(0,5).map(s=>s.name).join(", ")}${hits.length>5?" …":""} (목록에서 선택)`; }
+    else { el.style.color="var(--dancheong-red)"; el.textContent="⚠ 등록된 점포명이 아닙니다. 확인 후 입력하세요."; }
+  }
+
+  function renderStoreList(){
+    $("storeCount").textContent = storeList.length;
+    const noCat = storeList.filter(s=>!s.cat).length;
+    $("storeCatNote").textContent = noCat ? `업종 미지정 ${noCat}곳` : (storeList.length ? "모든 점포 업종 지정 완료" : "");
+    $("storeList").innerHTML = storeList.length
+      ? [...storeList].sort((a,b)=>a.name.localeCompare(b.name,"ko")).map(s=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line)">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</span>
+          <select class="store-cat" data-name="${esc(s.name)}" style="font-size:12px;padding:2px 4px;width:auto">${catOptions(s.cat)}</select>
+          <button class="store-del" data-name="${esc(s.name)}" style="background:none;border:none;color:var(--dancheong-red);cursor:pointer;font-size:12px">삭제</button>
+        </div>`).join("")
+      : `<div class="hint" style="margin:0">등록된 점포가 없습니다.</div>`;
+    $("storeList").querySelectorAll(".store-del").forEach(b=> b.onclick=()=>deleteStore(b.dataset.name));
+    $("storeList").querySelectorAll(".store-cat").forEach(sel=> sel.onchange=()=>setStoreCat(sel.dataset.name, sel.value));
+  }
+  async function saveStores(list){
+    const map = new Map();
+    list.forEach(s=>{ const o=normStoreObj(s); if(!o.name) return; map.set(normStore(o.name), o); }); // 이름 기준 중복 제거(마지막 값 유지)
+    await setDoc(doc(db,COLLECTION,STORE_ID), { config:true, stores:[...map.values()], updatedAt: serverTimestamp() }, { merge:true });
+  }
+  async function setStoreCat(name, cat){
+    $("storeMsg").style.color="";
+    try { await saveStores(storeList.map(s=> normStore(s.name)===normStore(name) ? {name:s.name, cat} : s)); }
+    catch(e){ $("storeMsg").textContent="업종 저장 실패: "+(e.code||e.message); }
+  }
+  async function deleteStore(name){
+    try { await saveStores(storeList.filter(s=>normStore(s.name)!==normStore(name))); }
+    catch(e){ $("storeMsg").textContent="삭제 실패: "+(e.code||e.message); }
+  }
+  $("addStoreBtn").onclick = async ()=>{
+    const v = $("newStore").value.trim();
+    const cat = $("newStoreCat").value;
+    $("storeMsg").style.color="";
+    if(!v){ $("storeMsg").textContent="점포명을 입력하세요."; return; }
+    if(findStore(v)){ $("storeMsg").textContent="이미 등록된 점포입니다."; return; }
+    try { await saveStores([...storeList, {name:v, cat}]); $("newStore").value=""; $("newStoreCat").value=""; $("storeMsg").style.color="var(--dancheong-blue)"; $("storeMsg").textContent="추가되었습니다."; }
+    catch(e){ $("storeMsg").textContent="추가 실패: "+(e.code||e.message); }
+  };
+  $("clearStoresBtn").onclick = async ()=>{
+    if(!storeList.length) return;
+    if(!confirm(`점포 명단 ${storeList.length}개를 모두 삭제할까요?`)) return;
+    try { await saveStores([]); $("storeMsg").style.color=""; $("storeMsg").textContent="명단을 초기화했습니다."; }
+    catch(e){ $("storeMsg").textContent="초기화 실패: "+(e.code||e.message); }
+  };
+  $("downStoresBtn").onclick = ()=>{
+    if(!storeList.length){ $("storeMsg").style.color=""; $("storeMsg").textContent="내려받을 점포가 없습니다."; return; }
+    const aoa = [...storeList].sort((a,b)=>a.name.localeCompare(b.name,"ko")).map(s=>({ "점포명": s.name, "업종": s.cat||"" }));
+    const ws = XLSX.utils.json_to_sheet(aoa, { header:["점포명","업종"] });
+    ws["!cols"] = [{wch:24},{wch:12}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "점포명단");
+    const d = new Date();
+    XLSX.writeFile(wb, `상인회_점포명단_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.xlsx`);
+    $("storeMsg").style.color="var(--dancheong-blue)"; $("storeMsg").textContent=`${storeList.length}곳을 엑셀로 내려받았습니다. 업종(B열)을 채워 다시 업로드하세요.`;
+  };
+  const isHeaderWord = t => /^(점포|점포명|상호|상호명|상점|가게|이름|번호|no|no\.|순번|업종|분류|카테고리|종류)$/i.test(t);
+  const matchCat = t => { const x=String(t||"").trim(); if(!x) return ""; const hit=STORE_CATS.find(c=>c===x||normStore(c)===normStore(x)); return hit || x; };
+  $("storeFile").onchange = async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    $("storeMsg").style.color=""; $("storeMsg").textContent="엑셀 읽는 중…";
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:"array" });
+      let entries = [];
+      wb.SheetNames.forEach(sn=>{
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1 });
+        rows.forEach(r=>{
+          if(!r) return;
+          const name = String(r[0]==null?"":r[0]).trim();
+          const cat  = matchCat(r[1]);          // 2번째 열 = 업종(있으면)
+          if (name && !isHeaderWord(name)) entries.push({ name, cat });
+        });
+      });
+      // 기존 명단에 병합: 이름으로 매칭, 엑셀에 업종이 있으면 갱신, 없으면 기존 업종 유지
+      const map = new Map(storeList.map(s=>[normStore(s.name), {name:s.name, cat:s.cat}]));
+      entries.forEach(en=>{ const k=normStore(en.name); const prev=map.get(k); map.set(k, { name:en.name, cat: en.cat || (prev?prev.cat:"") }); });
+      const merged = [...map.values()];
+      await saveStores(merged);
+      const withCat = merged.filter(s=>s.cat).length;
+      $("storeMsg").style.color="var(--dancheong-blue)";
+      $("storeMsg").textContent = `${entries.length}행 반영 (현재 ${merged.length}곳, 업종 지정 ${withCat}곳). 이름 기준 중복은 자동 병합.`;
+    } catch(err){ $("storeMsg").style.color=""; $("storeMsg").textContent="엑셀 처리 실패: "+(err.message||err); }
+    finally { e.target.value=""; }
+  };
+  async function toggleMaster(email){
+    const em = email.toLowerCase();
+    let list = [...dynamicMasters];
+    if (list.includes(em)) list = list.filter(x=>x!==em);
+    else list.push(em);
+    try { await saveMasters(list); }   // 저장되면 onSnapshot이 목록·역할을 갱신
+    catch(e){ $("masterMsg").textContent = "저장 실패: " + (e.code||e.message); }
+  }
+  $("addMasterBtn").onclick = async ()=>{
+    const em = $("newMasterEmail").value.trim().toLowerCase();
+    $("masterMsg").style.color="";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ $("masterMsg").textContent="올바른 이메일을 입력하세요."; return; }
+    if (bootstrapMasters.includes(em) || dynamicMasters.includes(em)){ $("masterMsg").textContent="이미 대표 관리자입니다."; return; }
+    try { await saveMasters([...dynamicMasters, em]); $("newMasterEmail").value=""; $("masterMsg").style.color="var(--dancheong-blue)"; $("masterMsg").textContent="추가되었습니다."; }
+    catch(e){ $("masterMsg").textContent="저장 실패: "+(e.code||e.message); }
+  };
+  acctModal.addEventListener("click", e=>{ if(e.target===acctModal) closeAcct(); });
+
+  $("changePwBtn").onclick = async () => {
+    const cur = $("curPw").value, n1 = $("newPw1").value, n2 = $("newPw2").value;
+    const msg = $("acctMsg"); msg.style.color="";
+    if (!cur || !n1){ msg.textContent="현재 비밀번호와 새 비밀번호를 입력하세요."; return; }
+    if (n1.length < 6){ msg.textContent="새 비밀번호는 6자 이상이어야 합니다."; return; }
+    if (n1 !== n2){ msg.textContent="새 비밀번호가 서로 다릅니다."; return; }
+    $("changePwBtn").disabled = true;
+    try {
+      const cred = EmailAuthProvider.credential(currentEmail, cur);
+      await reauthenticateWithCredential(auth.currentUser, cred);   // 현재 비번 확인
+      await updatePassword(auth.currentUser, n1);
+      msg.style.color = "var(--dancheong-blue)";
+      msg.textContent = "비밀번호가 변경되었습니다.";
+      $("curPw").value=""; $("newPw1").value=""; $("newPw2").value="";
+    } catch(e){
+      msg.style.color="";
+      msg.textContent = (e.code==="auth/invalid-credential"||e.code==="auth/wrong-password")
+        ? "현재 비밀번호가 올바르지 않습니다." : "변경 실패: " + (e.code||e.message);
+    } finally { $("changePwBtn").disabled = false; }
+  };
+
+  $("resetMailBtn").onclick = async () => {
+    const msg = $("acctMsg"); msg.style.color="";
+    try {
+      await sendPasswordResetEmail(auth, currentEmail);
+      msg.style.color = "var(--dancheong-blue)";
+      msg.textContent = currentEmail + " 로 재설정 메일을 보냈습니다. (스팸함도 확인)";
+    } catch(e){ msg.style.color=""; msg.textContent = "메일 발송 실패: " + (e.code||e.message); }
+  };
+
+  /* ---------- 실시간 구독 (역할별) ---------- */
+  function subscribe(){
+    // 대표 관리자: 전체 / 담당자: 본인이 입력한 것만
+    const q = isMaster
+      ? query(col, orderBy("createdAt","desc"))
+      : query(col, where("operatorUid","==",currentUid));
+    unsub = onSnapshot(q, snap => {
+      records = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(r => !r.ledger && !r.config && !r.budget);
+      if (!isMaster) records.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+      refreshYearOptions();
+      refreshOperatorOptions();
+      renderStats(); renderData();
+    });
+  }
+
+  /* ---------- 담당자(계정) 선택지 자동 채우기 — 대표 전용 필터 ---------- */
+  function refreshOperatorOptions(){
+    const ops = [...new Set(records.map(r=>r.operatorEmail).filter(Boolean))].sort();
+    [["statOperator","전체(합산)"],["dataOperator","전체 담당자"]].forEach(([id,allLabel])=>{
+      const sel = $(id); if(!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = `<option value="">${allLabel}</option>` + ops.map(e=>`<option value="${e}">${e}</option>`).join("");
+      sel.value = [...sel.options].some(o=>o.value===prev) ? prev : "";
+    });
+  }
+
+  /* ---------- 연도 선택지 자동 채우기 (연도별 분리) ---------- */
+  function refreshYearOptions(){
+    const thisYear = String(new Date().getFullYear());
+    const years = [...new Set([thisYear, ...records.map(r=>yearOf(r.date)).filter(Boolean)])].sort().reverse();
+    [["statYear", false],["dataYear", false]].forEach(([id])=>{
+      const sel = $(id); if(!sel) return;
+      const prev = sel.value || thisYear;          // 기본: 올해
+      const opts = `<option value="">전체 연도</option>` + years.map(y=>`<option value="${y}">${y}년</option>`).join("");
+      sel.innerHTML = opts;
+      sel.value = [...sel.options].some(o=>o.value===prev) ? prev : thisYear;
+    });
+  }
+
+  /* ---------- 미사용 시 자동 로그아웃 (개인정보 보호) ---------- */
+  let idleTimer = null;
+  const IDLE_MS = 15*60*1000;                      // 15분
+  function resetIdle(){
+    clearTimeout(idleTimer);
+    if (!auth.currentUser) return;
+    idleTimer = setTimeout(()=>{
+      if (auth.currentUser){ signOut(auth); alert("15분간 사용이 없어 자동 로그아웃되었습니다.\n개인정보 보호를 위해 다시 로그인해 주세요."); }
+    }, IDLE_MS);
+  }
+  ["click","keydown","mousemove","touchstart","scroll"].forEach(ev=>document.addEventListener(ev, resetIdle, {passive:true}));
+
+  /* ---------- 탭 전환 ---------- */
+  document.querySelectorAll("nav.tabs button").forEach(b=>{
+    b.onclick = ()=>{
+      document.querySelectorAll("nav.tabs button").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+      document.querySelectorAll(".tabpane").forEach(p=>p.style.display="none");
+      $("tab-"+b.dataset.tab).style.display="block";
+    };
+  });
+
+  /* ---------- 기본값 ---------- */
+  function todayDefaults(){
+    const t = new Date().toISOString().slice(0,10);
+    $("fDate").value = t; $("statDate").value = t; $("dataDate").value = "";
+  }
+
+  /* ---------- 생년월일 세그먼트(자동 이동) ---------- */
+  const bY=$("bY"), bM=$("bM"), bD=$("bD");
+  const digits = el => { el.value = el.value.replace(/\D/g,""); };
+  bY.addEventListener("input", ()=>{ digits(bY); if(bY.value.length>=4) bM.focus(); });
+  bM.addEventListener("input", ()=>{ digits(bM); if(+bM.value>12) bM.value=bM.value.slice(0,1);
+    if(bM.value.length>=2 || /^[2-9]$/.test(bM.value)) bD.focus(); });
+  bD.addEventListener("input", ()=>{ digits(bD); if(+bD.value>31) bD.value=bD.value.slice(0,1); });
+  bM.addEventListener("keydown", e=>{ if(e.key==="Backspace"&&bM.value==="") bY.focus(); });
+  bD.addEventListener("keydown", e=>{ if(e.key==="Backspace"&&bD.value==="") bM.focus(); });
+  bD.addEventListener("keydown", e=>{ if(e.key==="Enter") $("fPhone").focus(); });
+  function getBirth(){
+    const y=bY.value, m=bM.value, d=bD.value;
+    if(y.length!==4 || !m || !d) return "";           // 미입력
+    const iso = `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+    const dt = new Date(iso);
+    if(dt.getFullYear()!=+y || dt.getMonth()+1!=+m || dt.getDate()!=+d) return "INVALID";
+    return iso;
+  }
+  function clearBirth(){ bY.value=bM.value=bD.value=""; }
+
+  /* ---------- 쿠폰 판정 ---------- */
+  const couponFor = amt => amt>=67000 ? 20000 : amt>=34000 ? 10000 : 0;
+  // 매출현황: 5개 점포행에서 합계·목록 산출
+  const salesAmts = () => [...document.querySelectorAll("#salesRows .sAmt")].map(el=>Number((el.value||"").replace(/\D/g,""))||0);
+  const salesTotal = () => salesAmts().reduce((s,n)=>s+n,0);
+  function salesData(){
+    const rows=[...document.querySelectorAll("#salesRows .sales-row")];
+    return rows.map(r=>({ name:(r.querySelector(".sStore").value||"").trim(), amt:Number((r.querySelector(".sAmt").value||"").replace(/\D/g,""))||0 }))
+               .filter(x=> x.name || x.amt>0);
+  }
+
+  /* ---------- 지급액 미리보기 + 기존 수령 내역 ---------- */
+  // 이름에서 한글·영문·숫자 외 문자(백틱·공백·기호 등)는 무시하고 대조
+  const cleanName = s => String(s||"").replace(/[^가-힣A-Za-z0-9]/g,"");
+  const digitsOnly = s => String(s||"").replace(/\D/g,"");
+  const yearOf = d => String(d||"").slice(0,4);   // 신청일자 연도 (연도별 분리 기준)
+  // 이름(정규화)+생년월일 일치 + 같은 연도 기존 기록 (전화번호 무관 — 동일인 표시용)
+  function matchByNameBirth(name, birth){
+    const cn = cleanName(name), yr = yearOf($("fDate").value);
+    return records.filter(x => cleanName(x.name)===cn && x.birth===birth && yearOf(x.date)===yr);
+  }
+  /* 공용 데이터로 누적 수령액을 조회 — 다른 담당자·지난 회차 입력분까지 정확히 반영.
+     ① 공용 원장(ledger) 문서(모든 담당자가 읽기 가능) ② 접수문서 합산 ③ 화면 캐시 순으로 권위값 산출 */
+  async function authPaid(name, birth, year){
+    const key = await makeDupKey(name, birth);
+    let paidLedger = null, recs = null;
+    try {
+      const ls = await getDoc(doc(db,COLLECTION,"ledger_"+key+"_"+year));
+      if (ls.exists()) paidLedger = ls.data().paid||0;
+    } catch(_){}
+    try {
+      const qs = await getDocs(query(collection(db,COLLECTION), where("dupKey","==",key)));
+      recs = qs.docs.map(d=>({id:d.id,...d.data()})).filter(r=>!r.ledger && !r.config && yearOf(r.date)===year);
+    } catch(_){ recs = null; }   // 엄격한 보안규칙에서 실패하면 원장/캐시로 대체
+    if (!recs) recs = matchByNameBirth(name, birth);
+    const paidRecs = recs.reduce((s,r)=>s+(r.coupon||0),0);
+    const paid = Math.max(paidLedger!=null?paidLedger:0, paidRecs);   // 권위값(더 큰 쪽)
+    return { key, paid, recs };
+  }
+  let eligTimer=null, eligToken=0, lastAuth=null;
+  function updatePreview(){
+    const el = $("couponPreview");
+    const elig = $("eligCheck");
+    const amount = salesTotal();
+    const tier = couponFor(amount);
+    const name = $("fName").value.trim();
+    const birth = getBirth();
+    const cn = cleanName(name);
+    const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
+    const nameBirthReady = cn.length>=2 && birth && birth!=="INVALID";
+    const year = yearOf($("fDate").value);
+
+    // 구매금액 안내(항상 갱신)
+    if (!amount) el.innerHTML = "금액을 입력하면 지급될 상품권이 표시됩니다.";
+    else if (tier===0) el.innerHTML = `34,000원 이상 구매 시 온누리상품권이 지급됩니다. (입력: ${won(amount)}원)`;
+    else el.innerHTML = `지급 기준액: <b style="color:${tier>=20000?col10:col5}">온누리상품권 ${won(tier)}원</b>`;
+
+    // 이름+생년월일 준비 전 → 배너는 안내만
+    if (!nameBirthReady){
+      lastAuth = null;
+      $("historyBox").className="histbox";
+      elig.className = "hint"; elig.removeAttribute("style");
+      elig.textContent = (cn.length>=1 && !(birth && birth!=="INVALID"))
+        ? "생년월일까지 입력하면 환급 가능 여부가 표시됩니다."
+        : "이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.";
+      return;
+    }
+
+    // 같은 사람이면 재조회 없이 즉시 렌더(금액만 바뀐 경우 등)
+    if (lastAuth && lastAuth.name===name && lastAuth.birth===birth && lastAuth.year===year){
+      renderElig(lastAuth); return;
+    }
+    // 공용 데이터 조회(디바운스) — 다른 담당자·지난 회차 입력분까지 반영
+    elig.className = "hint"; elig.removeAttribute("style"); elig.textContent = "환급 가능 여부 확인 중…";
+    clearTimeout(eligTimer);
+    const myToken = ++eligToken;
+    eligTimer = setTimeout(async ()=>{
+      const data = await authPaid(name, birth, year);
+      if (myToken !== eligToken) return;          // 조회 중 입력이 바뀌면 무시
+      lastAuth = { ...data, name, birth, year };
+      renderElig(lastAuth);
+    }, 350);
+  }
+  function renderElig(data){
+    const elig = $("eligCheck"), box = $("historyBox"); box.className="histbox";
+    const col5 = "var(--dancheong-blue)", col10 = "var(--dancheong-red)";
+    const amount = salesTotal();
+    const tier = couponFor(amount);
+    const phone = digitsOnly($("fPhone").value);
+    const { name, birth, year, paid, recs } = data;
+    const remaining = PAYOUT_CAP - paid;
+    const grant = amount>0 ? Math.max(0, Math.min(tier, remaining)) : 0;
+
+    elig.className = remaining<=0 ? "elig-no" : "elig-ok";
+    let head;
+    if (remaining<=0){
+      head = `<b style="color:${col10}">✗ 환급 불가</b> · 한도(${won(PAYOUT_CAP)}원)를 모두 수령한 고객입니다.`;
+    } else if (paid>0){
+      head = `<b style="color:${col5}">✓ 환급 가능</b> · 남은 한도 <b>${won(remaining)}원</b> <span style="color:var(--ink-soft)">(기존 ${won(paid)}원 수령)</span>`;
+    } else {
+      head = `<b style="color:${col5}">✓ 환급 가능</b> · 첫 접수 <span style="color:var(--ink-soft)">(한도 ${won(PAYOUT_CAP)}원)</span>`;
+    }
+    if (amount>0 && remaining>0 && tier>0){
+      head += `<br>이번 지급 예정: <b style="color:${grant>=20000?col10:col5}">${won(grant)}원</b>${grant<tier?` <span style="color:${col10}">(남은 한도만큼만)</span>`:""}`;
+    }
+    elig.innerHTML = head;
+
+    if (recs && recs.length>0){
+      const items = [...recs].sort((a,b)=>(a.date>b.date?1:-1)).map(x=>
+        `<div class="h-item"><span>${esc(x.date)} · ${esc(x.district||"-")}</span><span>${won(x.coupon)}원</span></div>`).join("");
+      const diffPhone = phone && recs.some(x=> digitsOnly(x.phone) && digitsOnly(x.phone)!==phone);
+      const warn = remaining<=0
+        ? `<div class="h-warn">⚠ 누적 한도(${won(PAYOUT_CAP)}원) 도달 — 더 이상 지급할 수 없습니다.</div>`
+        : (amount>0 && tier>0 && grant<tier ? `<div class="h-warn">⚠ 남은 한도가 ${won(remaining)}원이라 이번엔 ${won(grant)}원만 지급됩니다.</div>` : "");
+      const phoneWarn = diffPhone ? `<div class="h-warn">⚠ 전화번호가 다른 동일 이름·생년월일 내역이 있습니다. 동일인 여부를 확인하세요.</div>` : "";
+      box.className = "histbox show" + (remaining<=0?" cap":"");
+      box.innerHTML =
+        `<div class="h-title">📋 ${esc(name)} · ${esc(birth)} · ${esc(year)}년 수령 내역</div>`
+        + items
+        + `<div class="h-sum"><span>기존 합계</span><span>${won(paid)}원 / 남은 한도 ${won(Math.max(0,remaining))}원</span></div>`
+        + (remaining>0 && amount>0 ? `<div class="h-next">이번 지급 예정: ${won(grant)}원 (지급 시 누적 ${won(paid+grant)}원 / 잔여 ${won(remaining-grant)}원)</div>` : "")
+        + warn + phoneWarn;
+    }
+  }
+  ["fName","fPhone","fDate"].forEach(id => $(id).addEventListener("input", updatePreview));
+  $("fDate").addEventListener("change", updatePreview);
+  [bY,bM,bD].forEach(el => el.addEventListener("input", updatePreview));
+
+  /* ---------- 휴대폰 번호 자동 하이픈 (010-1234-5678) ---------- */
+  $("fPhone").addEventListener("input", (e)=>{
+    const d = $("fPhone").value.replace(/\D/g,"").slice(0,11);
+    let f = d;
+    if (d.length > 7)      f = d.slice(0,3)+"-"+d.slice(3,7)+"-"+d.slice(7);
+    else if (d.length > 3) f = d.slice(0,3)+"-"+d.slice(3);
+    // 하이픈을 지우는 중이면 끝의 '-'는 다시 붙이지 않음
+    if (e.inputType === "deleteContentBackward" && f.endsWith("-")) f = f.slice(0,-1);
+    $("fPhone").value = f;
+  });
+
+  /* ---------- 구매금액 천단위 콤마 (숫자만) ---------- */
+  document.querySelectorAll("#salesRows .sAmt").forEach(el=>{
+    el.addEventListener("input", ()=>{
+      const d = el.value.replace(/\D/g,"");
+      el.value = d ? Number(d).toLocaleString("ko-KR") : "";
+      renderSalesTotal();
+      updatePreview();
+    });
+  });
+  document.querySelectorAll("#salesRows .sStore").forEach(el=> el.addEventListener("input", ()=>{ checkSalesStores(); updatePreview(); }));
+  /* 매출현황 점포 검증 — 등록된 참여점포만 허용 */
+  function checkSalesStores(){
+    const bad = [];
+    document.querySelectorAll("#salesRows .sales-row").forEach(row=>{
+      const el = row.querySelector(".sStore");
+      const v = (el.value||"").trim();
+      if (!v){ el.classList.remove("bad"); return; }
+      if (findStore(v)){ el.classList.remove("bad"); }
+      else { el.classList.add("bad"); bad.push(v); }
+    });
+    const msg = $("salesStoreMsg");
+    if (bad.length){
+      msg.className = "sales-warn show";
+      msg.textContent = `참여점포가 아닙니다. (${bad.join(", ")}) — 등록된 참여점포만 입력할 수 있습니다.`;
+    } else {
+      msg.className = "sales-warn";
+      msg.textContent = "";
+    }
+    return bad;
+  }
+  function renderSalesTotal(){
+    const t = salesTotal();
+    $("salesTotal").innerHTML = `구매금액 합계: <b>${won(t)}원</b>`;
+  }
+
+  /* ---------- 중복키 (이름+생년월일 2개 기준) ---------- */
+  async function makeDupKey(name, birth){
+    const raw = cleanName(name) + "|" + birth;      // 전화번호 제외 — 이름+생년월일로 동일인 판정
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }
+
+  /* ---------- 폼 초기화 (다음 사람 입력) ---------- */
+  function resetForm(clearMsg){
+    ["fName","fPhone","fAddress"].forEach(id=>$(id).value="");
+    document.querySelectorAll("#salesRows input").forEach(el=>el.value="");
+    if($("salesTotal")) $("salesTotal").innerHTML="구매금액 합계: <b>0원</b>";
+    document.querySelectorAll("#salesRows .sStore").forEach(el=>el.classList.remove("bad"));
+    if($("salesStoreMsg")){ $("salesStoreMsg").className="sales-warn"; $("salesStoreMsg").textContent=""; }
+    clearBirth(); $("fDistrict").value="";
+    $("fConsent").checked=false; $("fMarketing").checked=false;
+    $("couponPreview").textContent="금액을 입력하면 지급될 상품권이 표시됩니다.";
+    const eg=$("eligCheck"); eg.className="hint"; eg.removeAttribute("style"); eg.textContent="이름·생년월일을 입력하면 환급 가능 여부가 표시됩니다.";
+    lastAuth = null;
+    $("historyBox").className="histbox"; $("historyBox").innerHTML="";
+    checkStore();
+    if (clearMsg){ const e=$("entryResult"); e.className="result"; e.innerHTML=""; }
+    $("fName").focus();
+    // 신청일자(날짜)는 같은 날 연속 접수를 위해 그대로 유지
+  }
+  $("resetBtn").onclick = ()=> resetForm(true);
+  // 경고/완료 메시지 안의 버튼 (다음 사람 입력 / 예외 지급)
+  $("entryResult").addEventListener("click", e=>{
+    if (e.target.closest(".next-btn")) resetForm(true);
+    else if (e.target.closest(".exc-btn")) doException();
+  });
+
+  /* ---------- 접수 ---------- */
+  $("submitBtn").onclick = async () => {
+    const r = $("entryResult"); r.className="result";
+    const name = $("fName").value.trim();
+    const birth = getBirth();
+    const phoneRaw = $("fPhone").value.replace(/\D/g,"");
+    const district = $("fDistrict").value;
+    const address = $("fAddress").value.trim();
+    const sales = salesData();
+    const store = sales[0] ? sales[0].name : "";
+    const storeCat = (findStore(store)||{}).cat || "";
+    const marketing = $("fMarketing").checked;
+    const amount = salesTotal();
+    const date = $("fDate").value;
+
+    if (!date || !name || !birth || !phoneRaw || !amount){ toast(r,"warn","입력 확인","날짜·이름·생년월일·전화번호·금액을 모두 입력하세요."); return; }
+    // 참여점포 검증 — 등록되지 않은 점포는 접수 불가
+    const badStores = checkSalesStores();
+    if (badStores.length){ toast(r,"warn","참여점포가 아닙니다.",`${badStores.join(", ")} — 등록된 참여점포만 입력할 수 있습니다.`); return; }
+    if (sales.some(s=> s.amt>0 && !s.name)){ toast(r,"warn","점포명 확인","금액을 입력한 행은 점포명도 입력해야 합니다."); return; }
+    if (birth==="INVALID"){ toast(r,"warn","생년월일 확인","생년월일이 올바르지 않습니다. (예: 1979 / 10 / 10)"); return; }
+    if (!/^01\d{8,9}$/.test(phoneRaw)){ toast(r,"warn","전화번호 확인","올바른 휴대폰 번호를 입력하세요."); return; }
+    if (!district){ toast(r,"warn","지역 선택","거주 지역(구)을 선택하세요."); return; }
+    if (!$("fConsent").checked){ toast(r,"warn","동의 필요","개인정보 수집·이용에 동의해야 접수할 수 있습니다."); return; }
+
+    const tier = couponFor(amount);
+    if (tier===0){ toast(r,"warn","지급 대상 아님",`구매금액 합계가 34,000원 미만입니다. (합계: ${won(amount)}원)`); return; }
+
+    const dupKey = await makeDupKey(name, birth);
+    const yr = yearOf(date);
+    const CAP = PAYOUT_CAP;                               // 1인 연도별 누적 지급 한도
+    // 공용 데이터로 누적 조회 — 다른 담당자·지난 회차 입력분까지 반영(화면 캐시에만 의존하지 않음)
+    const authInfo = await authPaid(name, birth, yr);
+    const paidClient = authInfo.paid;
+    const ledgerId = "ledger_" + dupKey + "_" + yr;      // 사람×연도별 누적 원장
+    const diffPhone = (authInfo.recs||[]).some(x => digitsOnly(x.phone) && digitsOnly(x.phone)!==phoneRaw);
+
+    // 이미 한도 초과면 즉시 차단(서버 요청 전) — 예외 지급 버튼 제공
+    if (CAP - paidClient <= 0){
+      showCapBlocked(paidClient, { date, name, birth, phoneRaw, district, address, store, storeCat, stores:sales, marketing, amount, tier, dupKey, ledgerId, yr, paid:paidClient }, diffPhone);
+      return;
+    }
+
+    $("submitBtn").disabled = true;
+    try{
+      // 트랜잭션: 여러 기기가 같은 손님을 동시에 접수해도 한도를 안전하게 순차 처리
+      const ledgerRef = doc(db, COLLECTION, ledgerId);
+      const budgetRef = doc(db, COLLECTION, "budget_" + date);
+      const result = await runTransaction(db, async (tx)=>{
+        const ls = await tx.get(ledgerRef);
+        const bs = await tx.get(budgetRef);                          // 쓰기 전에 모두 읽기
+        const paid = ls.exists() ? (ls.data().paid||0) : paidClient; // 원장 없으면 기존 데이터 합계로 초기화
+        const rem = CAP - paid;
+        if (rem <= 0) return { blocked:true, paid };
+        const g = Math.min(tier, rem);
+        tx.set(ledgerRef, { ledger:true, paid: paid + g, dupKey, year: yr, updatedAt: serverTimestamp() }, { merge:true });
+        tx.set(budgetRef, { budget:true, date, issued: (bs.exists()?(bs.data().issued||0):0) + g }, { merge:true });
+        const recRef = doc(collection(db, COLLECTION));
+        tx.set(recRef, { date, name, birth, phone:phoneRaw, district, address, store, storeCat, stores:sales, amount, coupon:g, marketing, dupKey, ledgerId, operatorUid: currentUid, operatorEmail: currentEmail, createdAt: serverTimestamp() });
+        return { blocked:false, paid, grant:g };
+      });
+
+      if (result.blocked){
+        showCapBlocked(result.paid, { date, name, birth, phoneRaw, district, address, store, storeCat, stores:sales, marketing, amount, tier, dupKey, ledgerId, yr, paid:result.paid }, diffPhone);
+        return;
+      }
+      const { paid, grant } = result;
+      const totalNow = paid + grant;
+      r.className="result ok show";
+      let note = "";
+      if (grant < tier){
+        note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 원래 ${won(tier)}원 대상이나 남은 한도가 ${won(CAP-paid)}원이라 <b>${won(grant)}원</b>만 지급 (누적 ${won(totalNow)}원, 한도 도달)</span>`;
+      } else if (paid>0){
+        note = `<br><span style="font-size:12px;color:var(--dancheong-gold)">※ 기존 ${won(paid)}원 + 이번 ${won(grant)}원 = 누적 ${won(totalNow)}원${totalNow>=CAP?" (한도 도달)":` / 잔여 ${won(CAP-totalNow)}원`}</span>`;
+      } else if (totalNow>=CAP){
+        note = `<br><span style="font-size:12px;color:var(--dancheong-red)">※ 한도(${won(CAP)}원)에 도달하여 이후에는 지급되지 않습니다.</span>`;
+      }
+      r.innerHTML = `<span class="big">✔ ${won(grant)}원 상품권 지급</span>${esc(name)} 님 접수 완료. (구매 ${won(amount)}원)${note}`;
+      resetForm(false);   // 입력값만 비우고 위 완료 메시지는 유지
+    }catch(e){ toast(r,"warn","저장 실패","네트워크/권한 오류: "+ (e.code||e.message||e)); }
+    finally{ $("submitBtn").disabled=false; }
+  };
+  function toast(el,kind,title,msg){ el.className="result "+(kind==="warn"?"dup":"ok")+" show"; el.innerHTML=`<span class="big">${esc(title)}</span>${esc(msg)}`; }
+
+  /* ---------- 한도 초과 차단 + 예외 지급 ---------- */
+  let pendingException = null;
+  function showCapBlocked(paid, data, diffPhone){
+    pendingException = data;
+    const r = $("entryResult");
+    r.className="result dup show";
+    const warnPhone = diffPhone
+      ? `<div style="font-size:12px;color:var(--dancheong-red);margin-top:6px">⚠ 전화번호가 다른 동일 이름·생년월일 내역이 있습니다. 동일인이면 지급 불가, <b>다른 사람(동명이인)이면 대표 관리자 확인 후 예외 지급</b>하세요.</div>`
+      : "";
+    r.innerHTML = `<span class="big">⚠ 지급 한도 초과</span>이미 한도(<b>${won(PAYOUT_CAP)}원</b>)를 모두 지급받으신 고객님입니다. (기존 수령 ${won(paid)}원)`
+      + warnPhone
+      + `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">`
+      + `<button class="exc-btn" style="background:var(--dancheong-gold);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">예외 지급 (대표 승인)</button>`
+      + `<button class="next-btn" style="background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700">다음 사람 입력 ▶</button>`
+      + `</div>`;
+  }
+  async function doException(){
+    const p = pendingException;
+    if (!p) return;
+    if (!confirm(`예외 지급 승인\n\n${p.name} 님에게 한도를 초과하여 ${won(p.tier)}원을 지급합니다.\n대표 관리자 확인 하에 진행하세요. 계속할까요?`)) return;
+    $("submitBtn").disabled = true;
+    try{
+      const ledgerRef = doc(db, COLLECTION, p.ledgerId);
+      const budgetRef = doc(db, COLLECTION, "budget_" + p.date);
+      await runTransaction(db, async (tx)=>{
+        const ls = await tx.get(ledgerRef);
+        const bs = await tx.get(budgetRef);
+        const paid = ls.exists() ? (ls.data().paid||0) : p.paid;
+        tx.set(ledgerRef, { ledger:true, paid: paid + p.tier, dupKey:p.dupKey, year:p.yr, updatedAt: serverTimestamp() }, { merge:true });
+        tx.set(budgetRef, { budget:true, date:p.date, issued: (bs.exists()?(bs.data().issued||0):0) + p.tier }, { merge:true });
+        const recRef = doc(collection(db, COLLECTION));
+        tx.set(recRef, { date:p.date, name:p.name, birth:p.birth, phone:p.phoneRaw, district:p.district, address:p.address, store:p.store, storeCat:p.storeCat, stores:p.stores||[],
+          amount:p.amount, coupon:p.tier, marketing:p.marketing, dupKey:p.dupKey, ledgerId:p.ledgerId,
+          operatorUid: currentUid, operatorEmail: currentEmail, exception:true, approvedBy: currentEmail, createdAt: serverTimestamp() });
+      });
+      const r = $("entryResult");
+      r.className="result ok show";
+      r.innerHTML = `<span class="big">✔ 예외 지급 ${won(p.tier)}원</span>${esc(p.name)} 님 · 한도 초과 예외 승인 (처리: ${esc(currentEmail)})<br><button class="next-btn" style="background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;margin-top:10px">다음 사람 입력 ▶</button>`;
+      pendingException = null; resetForm(false);
+    }catch(e){ alert("예외 지급 실패: "+(e.code||e.message||e)); }
+    finally{ $("submitBtn").disabled=false; }
+  }
+
+  /* ---------- 통계 ---------- */
+  function statsSource(ignoreOp){
+    const y = $("statYear").value;            // "" = 전체 연도
+    let rows = y ? records.filter(r=>yearOf(r.date)===y) : records;
+    if ($("statScope").value!=="all"){
+      const d = $("statDate").value;
+      rows = rows.filter(r=>r.date===d);
+    }
+    if (!ignoreOp){                            // 대표 전용: 담당자 선택 필터
+      const op = $("statOperator").value;
+      if (op) rows = rows.filter(r=>(r.operatorEmail||"")===op);
+    }
+    return rows;
+  }
+  function renderStats(){
+    const rows = statsSource();                // 카드: 선택한 담당자(또는 전체) 기준
+    const c10 = rows.filter(r=>r.coupon===10000).length;
+    const c20 = rows.filter(r=>r.coupon===20000).length;
+    const total = rows.reduce((s,r)=>s+(r.coupon||0),0);
+    const rem = dailyBudget - total;
+    const op = isMaster ? $("statOperator").value : "";
+    // 라벨: 대표는 전체/선택 담당자, 담당자는 '내 접수'
+    $("statScopeLabel").textContent = !isMaster ? "내 신청 인원" : (op ? "신청 인원("+op+")" : "신청 인원(전체)");
+    $("sTotalLabel").textContent = !isMaster ? "내 총 지급 금액" : (op ? "지급 금액("+op+")" : "전체 총 지급 금액");
+    $("sCount").textContent = rows.length;
+    const vouchers = Math.round(total/10000);   // 실물 1만원권 장수 (2만원 지급 = 2장)
+    $("sVouchers").innerHTML = won(vouchers)+'<span style="font-size:14px">장</span>';
+    $("sVoucherNote").textContent = `1만원 ${won(c10)}명 · 2만원 ${won(c20)}명`;
+    $("sTotal").textContent = won(total)+"원";
+    $("sRemain").textContent = (rem>=0 ? won(rem) : "초과 "+won(-rem))+"원";
+    $("sRemainNote").textContent = `하루 예산 ${won(dailyBudget)}원 기준`;
+
+    // 계정(담당자)별 집계 — 대표 관리자만 (담당자 선택과 무관하게 항상 전체 계정 표시)
+    if (isMaster){
+      const arows = statsSource(true);
+      const am = {};
+      arows.forEach(r=>{
+        const k = r.operatorEmail || "(미지정)";
+        (am[k] = am[k] || {n:0, buy:0, pay:0});
+        am[k].n++; am[k].buy += (r.amount||0); am[k].pay += (r.coupon||0);
+      });
+      const akeys = Object.keys(am).sort((a,b)=> am[b].pay-am[a].pay);
+      const tot = arows.reduce((o,r)=>({n:o.n+1, buy:o.buy+(r.amount||0), pay:o.pay+(r.coupon||0)}), {n:0,buy:0,pay:0});
+      $("acctBody").innerHTML = (akeys.length ? akeys.map(k=>{
+        const d=am[k];
+        return `<tr><td>${esc(k)}</td><td style="text-align:right">${d.n}건</td><td style="text-align:right">${won(d.buy)}원</td><td style="text-align:right"><b>${won(d.pay)}원</b></td></tr>`;
+      }).join("") : `<tr><td colspan="4" class="empty">데이터가 없습니다.</td></tr>`)
+        + `<tr style="background:var(--hanji-2)"><td><b>전체 합계</b></td><td style="text-align:right"><b>${tot.n}건</b></td><td style="text-align:right"><b>${won(tot.buy)}원</b></td><td style="text-align:right"><b>${won(tot.pay)}원</b></td></tr>`;
+    }
+
+    // 구별 집계
+    const order = ["동구","중구","서구","유성구","대덕구","그 외"];
+    const map = {};
+    rows.forEach(r=>{
+      const g = r.district || "미지정";
+      (map[g] = map[g] || {n:0,sum:0});
+      map[g].n++;
+      map[g].sum += (r.coupon||0);
+    });
+    const keys = [...order.filter(k=>map[k]), ...Object.keys(map).filter(k=>!order.includes(k))];
+    const body = $("districtBody");
+    body.innerHTML = keys.length ? keys.map(k=>{
+      const d=map[k];
+      return `<tr><td><b>${esc(k)}</b></td><td style="text-align:right">${d.n}명</td><td style="text-align:right"><b>${won(d.sum)}원</b></td></tr>`;
+    }).join("") : `<tr><td colspan="3" class="empty">데이터가 없습니다.</td></tr>`;
+
+    // 구별 막대그래프 (지급액 기준)
+    const palette = {"동구":"#1f6f6b","중구":"#b3331f","서구":"#c79a3c","유성구":"#2e7d8f","대덕구":"#8a6d3b","그 외":"#9a958b","미지정":"#bdb6a6"};
+    const maxSum = Math.max(1, ...keys.map(k=>map[k].sum));
+    $("districtChart").innerHTML = keys.length ? keys.map(k=>{
+      const d=map[k], w=Math.round(d.sum/maxSum*100), col=palette[k]||"#1f6f6b";
+      return `<div class="bar-row">
+        <span class="bar-label">${esc(k)}</span>
+        <span class="bar-track"><span class="bar-fill" style="width:${w}%;background:${col}"></span></span>
+        <span class="bar-val"><b>${won(d.sum)}원</b> · ${d.n}명</span>
+      </div>`;
+    }).join("") : `<div class="empty" style="padding:14px">데이터가 없습니다.</div>`;
+  }
+  $("statScope").onchange = ()=>{ $("statDate").style.display = $("statScope").value==="all"?"none":""; renderStats(); };
+  $("statDate").onchange = renderStats;
+  $("statYear").onchange = renderStats;
+  $("statOperator").onchange = renderStats;
+
+  /* ---------- 데이터 관리 ---------- */
+  const maskName = n => n.length<=1 ? n : n[0]+"*".repeat(n.length-1);
+  const maskPhone = p => p.length>=10 ? p.slice(0,3)+"-****-"+p.slice(-4) : p;
+  function renderData(){
+    const kw = $("search").value.trim();
+    const fy = $("dataYear").value;
+    const fd = $("dataDate").value;
+    const fg = $("dataDistrict").value;
+    const fo = $("dataOperator").value;
+    let rows = records;
+    if (fy) rows = rows.filter(r=>yearOf(r.date)===fy);
+    if (fd) rows = rows.filter(r=>r.date===fd);
+    if (fg) rows = rows.filter(r=>(r.district||"")===fg);
+    if (fo) rows = rows.filter(r=>(r.operatorEmail||"")===fo);
+    if (kw) rows = rows.filter(r=> r.name.includes(kw) || (r.phone||"").includes(kw.replace(/\D/g,"")));
+    const body = $("dataBody");
+    $("dataEmpty").style.display = rows.length? "none":"block";
+    body.innerHTML = rows.map(r=>{
+      const mine = isMaster || r.operatorUid===currentUid;    // 본인 입력 건(또는 대표)만 수정 가능
+      return `
+      <tr>
+        <td>${esc(r.date)}</td>
+        <td style="font-size:11.5px;color:var(--ink-soft);white-space:nowrap">${esc(fmtTime(r.createdAt))}${r.editedAt?'<br><span style="color:var(--dancheong-gold)">수정 '+esc(fmtTime(r.editedAt))+'</span>':''}</td>
+        <td>${esc(r.birth||"")}</td>
+        <td>${esc(maskName(r.name))}</td>
+        <td>${esc(r.district||"-")}</td>
+        <td>${esc(maskPhone(r.phone||""))}</td>
+        <td>${won(r.amount)}원</td>
+        <td><span class="pill ${r.coupon>=20000?'pill10':'pill5'}">${won(r.coupon)}</span>${r.exception?'<span class="pill" style="background:#f3ead2;color:#8a6d1b;margin-left:4px">예외</span>':''}${r.editedBy?'<span class="pill" style="background:#f3ead2;color:#8a6d1b;margin-left:4px">수정</span>':''}</td>
+        <td class="mcol" style="font-size:11.5px;color:var(--ink-soft)">${esc(r.operatorEmail||"-")}</td>
+        <td style="white-space:nowrap">${mine?`<button class="edit" data-id="${r.id}" style="color:var(--dancheong-blue)">수정</button> `:""}<button class="del" data-id="${r.id}" data-name="${esc(r.name)}">삭제</button></td>
+      </tr>`;}).join("");
+    body.querySelectorAll(".del").forEach(b=>{
+      b.onclick = async ()=>{
+        if(!confirm(`${b.dataset.name} 님 내역을 삭제할까요? (되돌릴 수 없음)`)) return;
+        const rec = records.find(x=>x.id===b.dataset.id);
+        try{ if(rec) await deleteOneRecord(rec); }
+        catch(e){ alert("삭제 실패: "+(e.code||e.message||e)); }
+      };
+    });
+    body.querySelectorAll(".edit").forEach(b=>{
+      b.onclick = ()=> openEdit(b.dataset.id);
+    });
+  }
+
+  /* ---------- 상품권 금액 수정 (본인 입력 건 / 대표) ---------- */
+  const editModal = $("editModal");
+  let editingId = null;
+  function openEdit(id){
+    const r = records.find(x=>x.id===id); if(!r) return;
+    if (!(isMaster || r.operatorUid===currentUid)){ alert("본인이 입력한 건만 수정할 수 있습니다."); return; }
+    editingId = id;
+    $("edName").value = r.name || "";
+    $("edDate").textContent = r.date||"-";
+    $("edTime").textContent = fmtDateTime(r.createdAt) || "-";
+    $("edBirth").textContent = r.birth||"-";
+    $("edAmountInput").value = won(r.amount||0);
+    $("edCur").textContent = won(r.coupon)+"원";
+    $("edValue").value = won(r.coupon);
+    $("edMsg").style.color=""; $("edMsg").textContent="";
+    $("edNameHint").style.color=""; $("edNameHint").textContent="이름을 고치면 중복·누적 한도 기준도 함께 옮겨집니다.";
+    $("edHint").textContent = `참고: 구매금액 ${won(r.amount)}원 기준 지급액은 ${won(couponFor(r.amount))}원입니다.`;
+    editModal.classList.add("show");
+  }
+  function closeEdit(){ editModal.classList.remove("show"); editingId=null; }
+  $("editClose").onclick = closeEdit;
+  editModal.addEventListener("click", e=>{ if(e.target===editModal) closeEdit(); });
+  $("edValue").addEventListener("input", ()=>{
+    const d = $("edValue").value.replace(/\D/g,"");
+    $("edValue").value = d ? Number(d).toLocaleString("ko-KR") : "";
+  });
+  $("edAmountInput").addEventListener("input", ()=>{
+    const d = $("edAmountInput").value.replace(/\D/g,"");
+    $("edAmountInput").value = d ? Number(d).toLocaleString("ko-KR") : "";
+    const amt = Number(d||0);
+    const g = couponFor(amt);
+    $("edValue").value = won(g);      // 구매금액 기준 지급액으로 자동 반영
+    $("edAmountHint").textContent = amt ? `구매금액 ${won(amt)}원 기준 지급액 ${won(g)}원으로 자동 설정됨 (필요 시 아래에서 조정)` : "구매금액을 바꾸면 기준 지급액이 자동 반영됩니다.";
+  });
+  document.querySelectorAll(".ed-quick").forEach(b=>{
+    b.onclick = ()=>{ $("edValue").value = won(Number(b.dataset.v)); };
+  });
+  $("edSaveBtn").onclick = async ()=>{
+    const r = records.find(x=>x.id===editingId); if(!r) return;
+    const nv = Number(($("edValue").value||"").replace(/\D/g,""));
+    const nname = $("edName").value.trim();
+    const namt = Number(($("edAmountInput").value||"").replace(/\D/g,""));
+    const msg = $("edMsg"); msg.style.color="";
+    if (cleanName(nname).length < 2){ msg.textContent="이름을 2글자 이상 입력하세요."; return; }
+    if (!Number.isFinite(nv) || nv<0){ msg.textContent="올바른 금액을 입력하세요."; return; }
+    if (nv % 10000 !== 0){ msg.textContent="온누리상품권은 1만원 단위이므로 10,000원 단위로 입력하세요."; return; }
+    if (!Number.isFinite(namt) || namt<0){ msg.textContent="올바른 구매금액을 입력하세요."; return; }
+    const nameChanged = nname !== r.name;
+    const amountChanged = namt !== (r.amount||0);
+    if (nv === (r.coupon||0) && !nameChanged && !amountChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
+
+    const delta = nv - (r.coupon||0);
+    const oldLid = r.ledgerId || (r.dupKey ? "ledger_"+r.dupKey+"_"+yearOf(r.date) : null);
+    // 이름이 바뀌면 중복키(이름+생년월일)가 바뀌므로 누적 원장을 새 키로 이전
+    let newDupKey = r.dupKey, newLid = oldLid, moveLedger = false, seedPaid = 0;
+    if (nameChanged){
+      newDupKey = await makeDupKey(nname, r.birth);
+      newLid = "ledger_" + newDupKey + "_" + yearOf(r.date);
+      moveLedger = (newLid !== oldLid);
+      if (moveLedger){
+        // 새 이름으로 이미 접수된 같은 사람의 기존 지급액(이 건 제외)
+        seedPaid = records.filter(x => x.id!==r.id && yearOf(x.date)===yearOf(r.date)
+          && cleanName(x.name)===cleanName(nname) && x.birth===r.birth)
+          .reduce((s,x)=>s+(x.coupon||0),0);
+      }
+    }
+    const parts = [];
+    if (nameChanged) parts.push(`이름: ${r.name} → ${nname}`);
+    if (amountChanged) parts.push(`구매금액: ${won(r.amount)}원 → ${won(namt)}원`);
+    if (delta !== 0) parts.push(`지급액: ${won(r.coupon)}원 → ${won(nv)}원`);
+    if (!confirm(`${r.name} 님 내역을 수정합니다.\n\n${parts.join("\n")}\n\n(누적 한도·예산도 함께 조정됩니다) 계속할까요?`)) return;
+
+    $("edSaveBtn").disabled = true;
+    try{
+      const budgetRef = r.date ? doc(db,COLLECTION,"budget_"+r.date) : null;
+      await runTransaction(db, async (tx)=>{
+        // 읽기 먼저 (트랜잭션 규칙)
+        const oldLs = oldLid ? await tx.get(doc(db,COLLECTION,oldLid)) : null;
+        const newLs = moveLedger ? await tx.get(doc(db,COLLECTION,newLid)) : null;
+        const bs = budgetRef ? await tx.get(budgetRef) : null;
+
+        if (moveLedger){
+          // 이전 이름 원장에서 이 건 금액 차감
+          if (oldLs && oldLs.exists()){
+            const p = Math.max(0, (oldLs.data().paid||0) - (r.coupon||0));
+            tx.set(doc(db,COLLECTION,oldLid), { paid:p }, { merge:true });
+          }
+          // 새 이름 원장에 이 건 금액 반영 (없으면 기존 합계로 초기화)
+          const base = (newLs && newLs.exists()) ? (newLs.data().paid||0) : seedPaid;
+          tx.set(doc(db,COLLECTION,newLid),
+            { ledger:true, paid: base + nv, dupKey:newDupKey, year: yearOf(r.date), updatedAt: serverTimestamp() }, { merge:true });
+        } else if (oldLid && oldLs && oldLs.exists() && delta !== 0){
+          const p = Math.max(0, (oldLs.data().paid||0) + delta);
+          tx.set(doc(db,COLLECTION,oldLid), { paid:p }, { merge:true });
+        }
+        if (budgetRef && bs && bs.exists() && delta !== 0){
+          const iss = Math.max(0, (bs.data().issued||0) + delta);
+          tx.set(budgetRef, { issued:iss }, { merge:true });
+        }
+        const upd = { coupon:nv, editedBy: currentEmail, editedAt: serverTimestamp() };
+        if (amountChanged) upd.amount = namt;
+        if (nameChanged){ upd.name = nname; upd.dupKey = newDupKey; upd.ledgerId = newLid; }
+        tx.set(doc(db,COLLECTION,r.id), upd, { merge:true });
+      });
+      msg.style.color="var(--dancheong-blue)"; msg.textContent="수정되었습니다.";
+      setTimeout(closeEdit, 700);
+    }catch(e){ msg.textContent="수정 실패: "+(e.code||e.message||e); }
+    finally{ $("edSaveBtn").disabled=false; }
+  };
+
+  /* ---------- 삭제 (원장 차감 포함) ---------- */
+  function deleteOneRecord(rec){
+    const lid = rec.ledgerId || (rec.dupKey ? "ledger_"+rec.dupKey+"_"+yearOf(rec.date) : null);
+    const budgetRef = rec.date ? doc(db,COLLECTION,"budget_"+rec.date) : null;
+    return runTransaction(db, async (tx)=>{
+      let ls=null, bs=null;
+      if (lid) ls = await tx.get(doc(db,COLLECTION,lid));
+      if (budgetRef) bs = await tx.get(budgetRef);
+      if (lid && ls.exists()){
+        const p = Math.max(0, (ls.data().paid||0) - (rec.coupon||0));
+        tx.set(doc(db,COLLECTION,lid), { paid:p }, { merge:true });
+      }
+      if (budgetRef && bs.exists()){
+        const iss = Math.max(0, (bs.data().issued||0) - (rec.coupon||0));
+        tx.set(budgetRef, { issued:iss }, { merge:true });
+      }
+      tx.delete(doc(db,COLLECTION,rec.id));
+    });
+  }
+  async function bulkDelete(targets, label){
+    if (!isMaster){ alert("일괄 삭제는 대표 관리자만 할 수 있습니다."); return; }
+    if (!targets.length){ alert("삭제할 데이터가 없습니다."); return; }
+    if (!confirm(`${label}\n총 ${targets.length}건을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?`)) return;
+    const btns = document.querySelectorAll("#delMonthBtn,#delRangeBtn,#delAllBtn");
+    btns.forEach(b=>b.disabled=true);
+    let done=0, fail=0;
+    const CH = 15;                                   // 15건씩 병렬 처리
+    for (let i=0;i<targets.length;i+=CH){
+      const chunk = targets.slice(i,i+CH);
+      const res = await Promise.allSettled(chunk.map(r=>deleteOneRecord(r)));
+      done += res.filter(x=>x.status==="fulfilled").length;
+      fail += res.filter(x=>x.status==="rejected").length;
+      $("bulkMsg").textContent = `삭제 중… ${done}/${targets.length}`;
+    }
+    btns.forEach(b=>b.disabled=false);
+    $("bulkMsg").style.color = fail? "var(--dancheong-red)":"var(--dancheong-blue)";
+    $("bulkMsg").textContent = `삭제 완료: ${done}건${fail?` (실패 ${fail}건)`:""}`;
+  }
+  $("search").oninput = renderData;
+  $("dataDate").onchange = renderData;
+  $("dataDistrict").onchange = renderData;
+  $("dataYear").onchange = renderData;
+  $("dataOperator").onchange = renderData;
+
+  /* ---------- 기간/전체 일괄 삭제 (대표 전용) ---------- */
+  $("delMonthBtn").onclick = ()=>{
+    const m = $("delMonth").value;                 // "YYYY-MM"
+    if(!m){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="삭제할 월을 선택하세요."; return; }
+    const targets = records.filter(r=> (r.date||"").slice(0,7)===m);
+    bulkDelete(targets, `${m} 한 달치 데이터를 삭제합니다.`);
+  };
+  $("delRangeBtn").onclick = ()=>{
+    const from=$("delFrom").value, to=$("delTo").value;
+    if(!from || !to){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="시작일과 종료일을 모두 선택하세요."; return; }
+    if(from>to){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="시작일이 종료일보다 뒤입니다."; return; }
+    const targets = records.filter(r=> r.date>=from && r.date<=to);
+    bulkDelete(targets, `${from} ~ ${to} 기간 데이터를 삭제합니다.`);
+  };
+  $("delAllBtn").onclick = ()=>{
+    if(!isMaster){ alert("전체 삭제는 대표 관리자만 할 수 있습니다."); return; }
+    const ans = prompt(`전체 데이터(${records.length}건)를 삭제합니다. 되돌릴 수 없습니다.\n계속하려면 '삭제'를 입력하세요.`);
+    if(ans!=="삭제"){ $("bulkMsg").style.color=""; $("bulkMsg").textContent="전체 삭제를 취소했습니다."; return; }
+    bulkDelete([...records], "전체 데이터를 삭제합니다.");
+  };
+
+  /* ---------- 엑셀 내보내기 ---------- */
+  $("exportBtn").onclick = ()=>{
+    const fy = $("dataYear").value;
+    const fd = $("dataDate").value;
+    const fg = $("dataDistrict").value;
+    const fo = $("dataOperator").value;
+    let rows = records;
+    if (fy) rows = rows.filter(r=>yearOf(r.date)===fy);
+    if (fd) rows = rows.filter(r=>r.date===fd);
+    if (fg) rows = rows.filter(r=>(r.district||"")===fg);
+    if (fo) rows = rows.filter(r=>(r.operatorEmail||"")===fo);
+    if(!rows.length){ alert("내보낼 데이터가 없습니다."); return; }
+    rows = [...rows].sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+
+    const krDate = ds => { if(!ds) return ""; const [y,m,d]=ds.split("-").map(Number); const w="일월화수목금토"[new Date(y,m-1,d).getDay()]; return `${y}. ${m}. ${d}.(${w})`; };
+    const eventDate = fd || rows[0]?.date || new Date().toISOString().slice(0,10);
+    const salesPairs = r => {
+      let p = (Array.isArray(r.stores) && r.stores.length) ? r.stores : ((r.store||r.amount) ? [{name:r.store||"", amt:r.amount||0}] : []);
+      return p.slice(0,5);
+    };
+
+    const A = [];
+    A.push(["온누리상품권 환급행사 일일실적 보고"]);           // 0: 제목
+    A.push([]);                                                 // 1
+    A.push(["운영현황"]);                                       // 2
+    A.push(["시 장 명","문창전통시장"]);                         // 3
+    A.push(["행 사 일", krDate(eventDate)]);                     // 4
+    A.push(["운영시간","09:00~17:00"]);                          // 5
+    A.push(["참여점포", storeList.length]);                      // 6
+    A.push([]);                                                 // 7
+    A.push(["일련번호","성명","생년월일","연락처","환급액","매출현황","","","","","","","","","",""]); // 8 상단헤더
+    A.push(["","","","","","계","점포명1","금액","점포명2","금액","점포명3","금액","점포명4","금액","점포명5","금액"]); // 9 하단헤더
+
+    let sumPay=0, sumBuy=0;
+    rows.forEach((r,i)=>{
+      const pairs = salesPairs(r);
+      const cells = [ i+1, r.name, (r.birth||"").replace(/-/g,""),
+        (r.phone||"").replace(/(\d{3})(\d{3,4})(\d{4})/,"$1-$2-$3"),
+        r.coupon||0, r.amount||0 ];
+      for(let k=0;k<5;k++){ cells.push(pairs[k]?pairs[k].name:""); cells.push(pairs[k]?(pairs[k].amt||0):""); }
+      A.push(cells);
+      sumPay += (r.coupon||0); sumBuy += (r.amount||0);
+    });
+    A.push(["합계","","","", sumPay, sumBuy, "","","","","","","","","",""]);
+
+    const ws = XLSX.utils.aoa_to_sheet(A);
+    ws["!merges"] = [
+      {s:{r:0,c:0},e:{r:0,c:15}},   // 제목
+      {s:{r:8,c:0},e:{r:9,c:0}},    // 일련번호
+      {s:{r:8,c:1},e:{r:9,c:1}},    // 성명
+      {s:{r:8,c:2},e:{r:9,c:2}},    // 생년월일
+      {s:{r:8,c:3},e:{r:9,c:3}},    // 연락처
+      {s:{r:8,c:4},e:{r:9,c:4}},    // 환급액
+      {s:{r:8,c:5},e:{r:8,c:15}},   // 매출현황
+    ];
+    ws["!cols"] = [{wch:8},{wch:10},{wch:11},{wch:14},{wch:10},{wch:11},
+      {wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10}];
+
+    // 집계 시트(참고용)
+    const c10=rows.filter(r=>r.coupon===10000).length, c20=rows.filter(r=>r.coupon===20000).length;
+    const S=[];
+    S.push(["집계 요약"]);
+    S.push(["신청 인원", rows.length+"명"]);
+    S.push(["온누리 1만원 지급", c10+"명", won(c10*10000)+"원"]);
+    S.push(["온누리 2만원 지급", c20+"명", won(c20*20000)+"원"]);
+    S.push(["1만원권 총 매수", Math.round(sumPay/10000)+"장","(2만원 지급=2장)"]);
+    S.push(["구매금액 합계", sumBuy]);
+    S.push(["환급액 합계", sumPay]);
+    S.push([]);
+    S.push(["── 점포별 집계 ──","건수","구매금액","지급금액"]);
+    const smap={}; rows.forEach(r=> salesPairs(r).forEach(p=>{ const k=(p.name||"").trim()||"(미입력)"; smap[k]=smap[k]||{n:0,buy:0}; smap[k].n++; smap[k].buy+=(p.amt||0); }));
+    Object.keys(smap).sort((a,b)=>smap[b].buy-smap[a].buy).forEach(k=> S.push([k, smap[k].n+"건", smap[k].buy, ""]));
+    const ws2 = XLSX.utils.aoa_to_sheet(S);
+    ws2["!cols"]=[{wch:20},{wch:12},{wch:14},{wch:14}];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "일일실적보고");
+    XLSX.utils.book_append_sheet(wb, ws2, "집계");
+    XLSX.writeFile(wb, `온누리환급_일일실적_${eventDate}.xlsx`);
+  };
+}
+</script>
+</body>
+</html>
