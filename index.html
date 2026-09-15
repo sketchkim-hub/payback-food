@@ -626,7 +626,7 @@ function startApp(){
   const app = initializeApp(FIREBASE_CONFIG);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const col = collection(db, "applications");
+  const col = collection(db, COLLECTION);
 
   let records = [];     // 실시간 캐시
   let unsub = null, cfgUnsub = null, budgetUnsub = null, todayBudget = 0;
@@ -1340,8 +1340,8 @@ function startApp(){
     $("submitBtn").disabled = true;
     try{
       // 트랜잭션: 여러 기기가 같은 손님을 동시에 접수해도 한도를 안전하게 순차 처리
-      const ledgerRef = doc(db, "applications", ledgerId);
-      const budgetRef = doc(db, "applications", "budget_" + date);
+      const ledgerRef = doc(db, COLLECTION, ledgerId);
+      const budgetRef = doc(db, COLLECTION, "budget_" + date);
       const result = await runTransaction(db, async (tx)=>{
         const ls = await tx.get(ledgerRef);
         const bs = await tx.get(budgetRef);                          // 쓰기 전에 모두 읽기
@@ -1351,7 +1351,7 @@ function startApp(){
         const g = Math.min(tier, rem);
         tx.set(ledgerRef, { ledger:true, paid: paid + g, dupKey, year: yr, updatedAt: serverTimestamp() }, { merge:true });
         tx.set(budgetRef, { budget:true, date, issued: (bs.exists()?(bs.data().issued||0):0) + g }, { merge:true });
-        const recRef = doc(collection(db, "applications"));
+        const recRef = doc(collection(db, COLLECTION));
         tx.set(recRef, { date, name, birth, phone:phoneRaw, district, address, store, storeCat, stores:sales, amount, coupon:g, marketing, dupKey, ledgerId, operatorUid: currentUid, operatorEmail: currentEmail, createdAt: serverTimestamp() });
         return { blocked:false, paid, grant:g };
       });
@@ -1400,15 +1400,15 @@ function startApp(){
     if (!confirm(`예외 지급 승인\n\n${p.name} 님에게 한도를 초과하여 ${won(p.tier)}원을 지급합니다.\n대표 관리자 확인 하에 진행하세요. 계속할까요?`)) return;
     $("submitBtn").disabled = true;
     try{
-      const ledgerRef = doc(db, "applications", p.ledgerId);
-      const budgetRef = doc(db, "applications", "budget_" + p.date);
+      const ledgerRef = doc(db, COLLECTION, p.ledgerId);
+      const budgetRef = doc(db, COLLECTION, "budget_" + p.date);
       await runTransaction(db, async (tx)=>{
         const ls = await tx.get(ledgerRef);
         const bs = await tx.get(budgetRef);
         const paid = ls.exists() ? (ls.data().paid||0) : p.paid;
         tx.set(ledgerRef, { ledger:true, paid: paid + p.tier, dupKey:p.dupKey, year:p.yr, updatedAt: serverTimestamp() }, { merge:true });
         tx.set(budgetRef, { budget:true, date:p.date, issued: (bs.exists()?(bs.data().issued||0):0) + p.tier }, { merge:true });
-        const recRef = doc(collection(db, "applications"));
+        const recRef = doc(collection(db, COLLECTION));
         tx.set(recRef, { date:p.date, name:p.name, birth:p.birth, phone:p.phoneRaw, district:p.district, address:p.address, store:p.store, storeCat:p.storeCat, stores:p.stores||[],
           amount:p.amount, coupon:p.tier, marketing:p.marketing, dupKey:p.dupKey, ledgerId:p.ledgerId,
           operatorUid: currentUid, operatorEmail: currentEmail, exception:true, approvedBy: currentEmail, createdAt: serverTimestamp() });
