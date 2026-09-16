@@ -548,10 +548,14 @@
           <button id="editClose" class="modal-x">✕</button>
         </div>
         <div class="acct-info">
-          <div><span>신청일자</span><b id="edDate">-</b></div>
           <div><span>입력시각</span><b id="edTime">-</b></div>
           <div><span>생년월일</span><b id="edBirth">-</b></div>
           <div><span>현재 지급액</span><b id="edCur">-</b></div>
+        </div>
+        <div class="modal-sec" id="edDateSec" style="display:none">
+          <h4>신청일자 수정 <span style="font-weight:400;font-size:12px;color:var(--ink-soft)">(대표 전용)</span></h4>
+          <input id="edDate" type="date" />
+          <div class="hint">날짜를 고치면 해당 날짜의 예산 집계도 함께 옮겨집니다.</div>
         </div>
         <div class="modal-sec">
           <h4>이름 수정</h4>
@@ -645,7 +649,9 @@ function startApp(){
   let dynamicMasters = [], approvedOps = [], pendingOps = [];
   const bootstrapMasters = MASTER_EMAILS.map(e=>String(e||"").toLowerCase());
   const CFG_ID = "_config_admins";              // 대표 목록 + 담당자 승인 정보 저장 문서(applications 내)
-  const todayStr = ()=> new Date().toLocaleDateString("sv-SE");   // YYYY-MM-DD (로컬)
+  // 서울(KST) 기준 날짜 — 기기 시간대와 무관하게 동일한 날짜를 사용
+  const kstToday = ()=> new Date(Date.now() + 9*3600*1000).toISOString().slice(0,10);
+  const todayStr = ()=> kstToday();   // YYYY-MM-DD (서울 기준)
 
   /* ---------- 인증 + 역할 + 승인 ---------- */
   onAuthStateChanged(auth, user => {
@@ -716,7 +722,10 @@ function startApp(){
   }
   function renderBudgetBar(){
     const el = $("budgetBar"); if(!el) return;
-    const used = todayBudget, rem = dailyBudget - used;
+    const today = todayStr();
+    // 실제 접수 기록 합계와 대조 — 카운터가 어긋나도 화면은 실제값으로 보정
+    const fromRecords = records.filter(r=>r.date===today).reduce((s,r)=>s+(r.coupon||0),0);
+    const used = Math.max(todayBudget||0, fromRecords), rem = dailyBudget - used;
     const pct = Math.min(100, Math.round(used/dailyBudget*100));
     const over = rem < 0;
     const barColor = over ? "var(--dancheong-red)" : pct>=80 ? "#d9822b" : "var(--dancheong-blue)";
@@ -1042,7 +1051,7 @@ function startApp(){
       if (!isMaster) records.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
       refreshYearOptions();
       refreshOperatorOptions();
-      renderStats(); renderData();
+      renderStats(); renderData(); renderBudgetBar();
     });
   }
 
@@ -1094,7 +1103,7 @@ function startApp(){
 
   /* ---------- 기본값 ---------- */
   function todayDefaults(){
-    const t = new Date().toISOString().slice(0,10);
+    const t = kstToday();              // 서울 기준 (기존 UTC 기준이라 날짜가 어긋나던 문제 수정)
     $("fDate").value = t; $("statDate").value = t; $("dataDate").value = "";
   }
 
@@ -1587,7 +1596,8 @@ function startApp(){
     if (!(isMaster || r.operatorUid===currentUid)){ alert("본인이 입력한 건만 수정할 수 있습니다."); return; }
     editingId = id;
     $("edName").value = r.name || "";
-    $("edDate").textContent = r.date||"-";
+    $("edDate").value = r.date || "";
+    $("edDateSec").style.display = isMaster ? "block" : "none";
     $("edTime").textContent = fmtDateTime(r.createdAt) || "-";
     $("edBirth").textContent = r.birth||"-";
     $("edAmountInput").value = won(r.amount||0);
@@ -1621,66 +1631,83 @@ function startApp(){
     const nv = Number(($("edValue").value||"").replace(/\D/g,""));
     const nname = $("edName").value.trim();
     const namt = Number(($("edAmountInput").value||"").replace(/\D/g,""));
+    const ndate = isMaster ? ($("edDate").value || r.date) : r.date;   // 날짜 수정은 대표만
     const msg = $("edMsg"); msg.style.color="";
     if (cleanName(nname).length < 2){ msg.textContent="이름을 2글자 이상 입력하세요."; return; }
     if (!Number.isFinite(nv) || nv<0){ msg.textContent="올바른 금액을 입력하세요."; return; }
     if (nv % 10000 !== 0){ msg.textContent="온누리상품권은 1만원 단위이므로 10,000원 단위로 입력하세요."; return; }
     if (!Number.isFinite(namt) || namt<0){ msg.textContent="올바른 구매금액을 입력하세요."; return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ndate)){ msg.textContent="신청일자를 올바르게 선택하세요."; return; }
     const nameChanged = nname !== r.name;
     const amountChanged = namt !== (r.amount||0);
-    if (nv === (r.coupon||0) && !nameChanged && !amountChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
+    const dateChanged = ndate !== r.date;
+    if (nv === (r.coupon||0) && !nameChanged && !amountChanged && !dateChanged){ msg.textContent="변경된 내용이 없습니다."; return; }
 
     const delta = nv - (r.coupon||0);
+    const newYear = yearOf(ndate);
     const oldLid = r.ledgerId || (r.dupKey ? "ledger_"+r.dupKey+"_"+yearOf(r.date) : null);
-    // 이름이 바뀌면 중복키(이름+생년월일)가 바뀌므로 누적 원장을 새 키로 이전
+    // 이름 또는 연도가 바뀌면 중복키·연도 기준이 달라지므로 누적 원장을 새 키로 이전
     let newDupKey = r.dupKey, newLid = oldLid, moveLedger = false, seedPaid = 0;
-    if (nameChanged){
-      newDupKey = await makeDupKey(nname, r.birth);
-      newLid = "ledger_" + newDupKey + "_" + yearOf(r.date);
+    if (nameChanged || dateChanged){
+      newDupKey = nameChanged ? await makeDupKey(nname, r.birth) : r.dupKey;
+      newLid = "ledger_" + newDupKey + "_" + newYear;
       moveLedger = (newLid !== oldLid);
       if (moveLedger){
-        // 새 이름으로 이미 접수된 같은 사람의 기존 지급액(이 건 제외)
-        seedPaid = records.filter(x => x.id!==r.id && yearOf(x.date)===yearOf(r.date)
+        // 새 기준(이름·연도)으로 이미 접수된 같은 사람의 기존 지급액(이 건 제외)
+        seedPaid = records.filter(x => x.id!==r.id && yearOf(x.date)===newYear
           && cleanName(x.name)===cleanName(nname) && x.birth===r.birth)
           .reduce((s,x)=>s+(x.coupon||0),0);
       }
     }
     const parts = [];
     if (nameChanged) parts.push(`이름: ${r.name} → ${nname}`);
+    if (dateChanged) parts.push(`신청일자: ${r.date} → ${ndate}`);
     if (amountChanged) parts.push(`구매금액: ${won(r.amount)}원 → ${won(namt)}원`);
     if (delta !== 0) parts.push(`지급액: ${won(r.coupon)}원 → ${won(nv)}원`);
     if (!confirm(`${r.name} 님 내역을 수정합니다.\n\n${parts.join("\n")}\n\n(누적 한도·예산도 함께 조정됩니다) 계속할까요?`)) return;
 
     $("edSaveBtn").disabled = true;
     try{
-      const budgetRef = r.date ? doc(db,COLLECTION,"budget_"+r.date) : null;
+      const oldBRef = r.date ? doc(db,COLLECTION,"budget_"+r.date) : null;
+      const newBRef = doc(db,COLLECTION,"budget_"+ndate);
       await runTransaction(db, async (tx)=>{
         // 읽기 먼저 (트랜잭션 규칙)
         const oldLs = oldLid ? await tx.get(doc(db,COLLECTION,oldLid)) : null;
         const newLs = moveLedger ? await tx.get(doc(db,COLLECTION,newLid)) : null;
-        const bs = budgetRef ? await tx.get(budgetRef) : null;
+        const oldBs = oldBRef ? await tx.get(oldBRef) : null;
+        const newBs = dateChanged ? await tx.get(newBRef) : null;
 
         if (moveLedger){
-          // 이전 이름 원장에서 이 건 금액 차감
+          // 이전 원장에서 이 건 금액 차감
           if (oldLs && oldLs.exists()){
             const p = Math.max(0, (oldLs.data().paid||0) - (r.coupon||0));
             tx.set(doc(db,COLLECTION,oldLid), { paid:p }, { merge:true });
           }
-          // 새 이름 원장에 이 건 금액 반영 (없으면 기존 합계로 초기화)
+          // 새 원장에 이 건 금액 반영 (없으면 기존 합계로 초기화)
           const base = (newLs && newLs.exists()) ? (newLs.data().paid||0) : seedPaid;
           tx.set(doc(db,COLLECTION,newLid),
-            { ledger:true, paid: base + nv, dupKey:newDupKey, year: yearOf(r.date), updatedAt: serverTimestamp() }, { merge:true });
+            { ledger:true, paid: base + nv, dupKey:newDupKey, year: newYear, updatedAt: serverTimestamp() }, { merge:true });
         } else if (oldLid && oldLs && oldLs.exists() && delta !== 0){
           const p = Math.max(0, (oldLs.data().paid||0) + delta);
           tx.set(doc(db,COLLECTION,oldLid), { paid:p }, { merge:true });
         }
-        if (budgetRef && bs && bs.exists() && delta !== 0){
-          const iss = Math.max(0, (bs.data().issued||0) + delta);
-          tx.set(budgetRef, { issued:iss }, { merge:true });
+
+        // 예산 집계: 날짜가 바뀌면 옛 날짜에서 빼고 새 날짜에 더함
+        if (dateChanged){
+          if (oldBs && oldBs.exists()){
+            tx.set(oldBRef, { issued: Math.max(0, (oldBs.data().issued||0) - (r.coupon||0)) }, { merge:true });
+          }
+          const nbase = (newBs && newBs.exists()) ? (newBs.data().issued||0) : 0;
+          tx.set(newBRef, { budget:true, date:ndate, issued: nbase + nv }, { merge:true });
+        } else if (oldBRef && oldBs && oldBs.exists() && delta !== 0){
+          tx.set(oldBRef, { issued: Math.max(0, (oldBs.data().issued||0) + delta) }, { merge:true });
         }
+
         const upd = { coupon:nv, editedBy: currentEmail, editedAt: serverTimestamp() };
         if (amountChanged) upd.amount = namt;
-        if (nameChanged){ upd.name = nname; upd.dupKey = newDupKey; upd.ledgerId = newLid; }
+        if (dateChanged) upd.date = ndate;
+        if (nameChanged) upd.name = nname;
+        if (moveLedger){ upd.dupKey = newDupKey; upd.ledgerId = newLid; }
         tx.set(doc(db,COLLECTION,r.id), upd, { merge:true });
       });
       msg.style.color="var(--dancheong-blue)"; msg.textContent="수정되었습니다.";
@@ -1769,7 +1796,7 @@ function startApp(){
     rows = [...rows].sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
 
     const krDate = ds => { if(!ds) return ""; const [y,m,d]=ds.split("-").map(Number); const w="일월화수목금토"[new Date(y,m-1,d).getDay()]; return `${y}. ${m}. ${d}.(${w})`; };
-    const eventDate = fd || rows[0]?.date || new Date().toISOString().slice(0,10);
+    const eventDate = fd || rows[0]?.date || kstToday();
     const salesPairs = r => {
       let p = (Array.isArray(r.stores) && r.stores.length) ? r.stores : ((r.store||r.amount) ? [{name:r.store||"", amt:r.amount||0}] : []);
       return p.slice(0,5);
