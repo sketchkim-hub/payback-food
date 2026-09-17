@@ -1321,15 +1321,19 @@ function startApp(){
     pop.style.top  = top + "px";
   }
   function closeStorePop(){ $("storePop").classList.remove("show"); spInput = null; }
-  document.addEventListener("click", e=>{
-    if (spInput && !e.target.closest("#storePop") && !e.target.classList.contains("sStore")) closeStorePop();
+  // 바깥을 누를 때만 닫음 (포커스가 잠깐 벗어나도 유지)
+  document.addEventListener("mousedown", e=>{
+    if (!spInput) return;
+    if (e.target.closest("#storePop")) return;          // 목록 내부(스크롤바 포함)
+    if (e.target.classList.contains("sStore")) return;  // 다른 점포명 칸
+    closeStorePop();
   });
   window.addEventListener("resize", ()=>{ if(spInput) positionStorePop(spInput); });
   document.querySelectorAll("#salesRows .sStore").forEach(el=>{
     el.addEventListener("focus", ()=> openStorePop(el));
+    el.addEventListener("click", ()=> openStorePop(el));
     el.addEventListener("input", ()=>{ openStorePop(el); checkSalesStores(); updatePreview(); });
-    el.addEventListener("blur", ()=> setTimeout(closeStorePop, 120));
-    el.addEventListener("keydown", e=>{ if(e.key==="Escape") closeStorePop(); });
+    el.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeStorePop(); el.blur(); } });
   });
   /* 매출현황 점포 검증 — 등록된 참여점포만 허용 */
   function checkSalesStores(){
