@@ -88,6 +88,15 @@
   .sales-row{display:flex;gap:8px;margin-bottom:6px}
   .sales-row .sStore{flex:1.6}
   .sales-row .sStore.bad{border-color:var(--dancheong-red);background:#fbeae6}
+  /* 참여점포 선택 목록 (위치 지정 가능) */
+  .store-pop{display:none;position:fixed;z-index:200;background:#fff;border:1px solid var(--line);
+    border-radius:10px;box-shadow:0 8px 24px rgba(43,42,38,.18);max-height:300px;overflow-y:auto;min-width:220px}
+  .store-pop.show{display:block}
+  .store-pop .sp-item{padding:9px 13px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .store-pop .sp-item:last-child{border-bottom:none}
+  .store-pop .sp-item:hover,.store-pop .sp-item.on{background:var(--hanji-2)}
+  .store-pop .sp-cat{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+  .store-pop .sp-empty{padding:12px 13px;font-size:13px;color:var(--dancheong-red)}
   .sales-warn{display:none;margin-top:6px;font-size:12.5px;color:var(--dancheong-red);font-weight:700}
   .sales-warn.show{display:block}
   .sales-row .sAmt{flex:1;text-align:right}
@@ -328,11 +337,11 @@
           <div class="field wide">
             <label>매출현황 (점포별 구매금액 · 최대 5곳)</label>
             <div id="salesRows">
-              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명1 (자동완성)" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액1" autocomplete="off" /></div>
-              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명2" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액2" autocomplete="off" /></div>
-              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명3" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액3" autocomplete="off" /></div>
-              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명4" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액4" autocomplete="off" /></div>
-              <div class="sales-row"><input class="sStore" list="storeOptions" type="text" placeholder="점포명5" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액5" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" type="text" placeholder="점포명1 (자동완성)" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액1" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" type="text" placeholder="점포명2" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액2" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" type="text" placeholder="점포명3" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액3" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" type="text" placeholder="점포명4" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액4" autocomplete="off" /></div>
+              <div class="sales-row"><input class="sStore" type="text" placeholder="점포명5" autocomplete="off" /><input class="sAmt" type="text" inputmode="numeric" placeholder="금액5" autocomplete="off" /></div>
             </div>
             <div class="sales-total" id="salesTotal">구매금액 합계: <b>0원</b></div>
             <div id="salesStoreMsg" class="sales-warn"></div>
@@ -894,7 +903,8 @@ function startApp(){
   function findStore(name){ const nv=normStore(name); return storeList.find(s=>normStore(s.name)===nv); }
   function populateStoreDatalist(){
     const dl = $("storeOptions"); if(!dl) return;
-    dl.innerHTML = storeList.map(s=>`<option value="${esc(s.name)}">${esc(s.cat)}</option>`).join("");
+    dl.innerHTML = [...storeList].sort((a,b)=>a.name.localeCompare(b.name,"ko"))
+      .map(s=>`<option value="${esc(s.name)}">${esc(s.cat)}</option>`).join("");
     const ns = $("newStoreCat"); if(ns && !ns.dataset.init){ ns.innerHTML = catOptions(""); ns.dataset.init="1"; }
   }
   function checkStore(){
@@ -1275,7 +1285,52 @@ function startApp(){
       updatePreview();
     });
   });
-  document.querySelectorAll("#salesRows .sStore").forEach(el=> el.addEventListener("input", ()=>{ checkSalesStores(); updatePreview(); }));
+  /* ---------- 참여점포 선택 목록 (가나다순 · 오른쪽 표시) ---------- */
+  let spInput = null;
+  const spSorted = ()=> [...storeList].sort((a,b)=>a.name.localeCompare(b.name,"ko"));
+  function openStorePop(el){
+    spInput = el;
+    const pop = $("storePop");
+    const kw = normStore(el.value);
+    const list = kw ? spSorted().filter(s=>normStore(s.name).includes(kw)) : spSorted();
+    pop.innerHTML = list.length
+      ? list.map(s=>`<div class="sp-item" data-name="${esc(s.name)}">${esc(s.name)}${s.cat?`<div class="sp-cat">${esc(s.cat)}</div>`:""}</div>`).join("")
+      : `<div class="sp-empty">참여점포가 아닙니다.</div>`;
+    pop.classList.add("show");
+    positionStorePop(el);
+    pop.querySelectorAll(".sp-item").forEach(it=>{
+      it.onmousedown = (e)=>{                       // blur보다 먼저 처리
+        e.preventDefault();
+        el.value = it.dataset.name;
+        closeStorePop();
+        checkSalesStores(); updatePreview();
+        const amt = el.closest(".sales-row")?.querySelector(".sAmt");
+        if (amt) amt.focus();                       // 선택 후 금액 칸으로 이동
+      };
+    });
+  }
+  function positionStorePop(el){
+    const pop = $("storePop"), r = el.getBoundingClientRect();
+    const gap = 8, w = pop.offsetWidth || 240, h = pop.offsetHeight || 260;
+    // 기본: 입력칸 오른쪽(금액 칸 영역)에 표시 — 공간이 없으면 아래로
+    let left = r.right + gap, top = r.top;
+    if (left + w > window.innerWidth - 8) left = Math.max(8, r.left);
+    if (left + w > window.innerWidth - 8) left = Math.max(8, window.innerWidth - w - 8);
+    if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - h - 8);
+    pop.style.left = left + "px";
+    pop.style.top  = top + "px";
+  }
+  function closeStorePop(){ $("storePop").classList.remove("show"); spInput = null; }
+  document.addEventListener("click", e=>{
+    if (spInput && !e.target.closest("#storePop") && !e.target.classList.contains("sStore")) closeStorePop();
+  });
+  window.addEventListener("resize", ()=>{ if(spInput) positionStorePop(spInput); });
+  document.querySelectorAll("#salesRows .sStore").forEach(el=>{
+    el.addEventListener("focus", ()=> openStorePop(el));
+    el.addEventListener("input", ()=>{ openStorePop(el); checkSalesStores(); updatePreview(); });
+    el.addEventListener("blur", ()=> setTimeout(closeStorePop, 120));
+    el.addEventListener("keydown", e=>{ if(e.key==="Escape") closeStorePop(); });
+  });
   /* 매출현황 점포 검증 — 등록된 참여점포만 허용 */
   function checkSalesStores(){
     const bad = [];
@@ -1863,5 +1918,6 @@ function startApp(){
   };
 }
 </script>
+  <div id="storePop" class="store-pop"></div>
 </body>
 </html>
